@@ -46,6 +46,14 @@ foreach ($ports as $port) {
     $hwclock[$port] = exec("ethtool -T $port|grep -Pom1 '^PTP Hardware Clock: \K.+'") == 'none' ? 'disabled' : '';
 }
 ?>
+<style>
+.timezone-picker {display:inline-flex; width:360px; max-width:100%; align-items:center;}
+.timezone-picker input {min-width:0;}
+.timezone-picker button {min-width:32px; margin:0; padding:8px;}
+.timezone-picker input:focus {outline:1px solid var(--text-color);}
+.timezone-options {max-height:240px; overflow-y:auto; overflow-x:hidden; background:var(--background-color); color:var(--text-color); border-color:var(--border-color); font-family:inherit; font-size:inherit;}
+.timezone-options .ui-menu-item-wrapper {overflow-wrap:anywhere;}
+</style>
 <form markdown="1" name="datetime_settings" method="POST" action="/update.htm" target="progressFrame" onchange="signal(this)">
 <input type="hidden" name="setDateTime" value="apply">
 
@@ -71,7 +79,7 @@ _(Time format)_:
   </select>
 
 _(Time zone)_:
-: <select name="timeZone"><?php
+: <select name="timeZone" aria-label="_(Time zone)_"><?php
   foreach ($tmzones as $zone) {
       [$timezone, $city] = my_explode('|', $zone);
       echo mk_option($var['timeZone'], $timezone, $city);
@@ -317,12 +325,79 @@ function timeState() {
   timers.timeState = setTimeout(timeState,2000);
 }
 
+// Keep the select as the source of truth for Apply and timezone reset handling.
+function timezonePicker(select) {
+  if (!$.fn.autocomplete) return;
+  var options = select.find('option').map(function() {
+    return {label:$(this).text(), value:this.value, option:this};
+  }).get();
+  var picker = $('<span class="timezone-picker"></span>').insertAfter(select);
+  var input = $('<input type="text" class="lock" autocomplete="off" spellcheck="false">')
+    .attr({'aria-label':select.attr('aria-label'), role:'combobox',
+      'aria-autocomplete':'list', 'aria-expanded':'false'})
+    .val(select.find(':selected').text()).appendTo(picker);
+  input.autocomplete({
+    minLength:0,
+    source:function(request,response) {
+      var term = request.term.toLowerCase().replace(/_/g,' ');
+      response(options.filter(function(item) {
+        return (item.label+' '+item.value).toLowerCase().replace(/_/g,' ').indexOf(term) != -1;
+      }));
+    },
+    focus:function() {
+      input.attr('aria-activedescendant',menu.find('.ui-state-active').attr('id'));
+      return false;
+    },
+    select:function(event,ui) {
+      input.val(ui.item.label);
+      if (!ui.item.option.selected) {
+        ui.item.option.selected = true;
+        select.trigger('change');
+      }
+      return false;
+    },
+    change:function() { input.val(select.find(':selected').text()); },
+    open:function() {
+      menu.find('.ui-menu-item-wrapper').attr('role','option');
+      input.attr('aria-expanded','true');
+    },
+    close:function() { input.attr('aria-expanded','false').removeAttr('aria-activedescendant'); }
+  });
+  var menu = input.autocomplete('widget').addClass('timezone-options').attr('role','listbox');
+  input.attr('aria-controls',menu.attr('id'));
+  input.autocomplete('instance')._resizeMenu = function() {
+    menu.outerWidth(picker.outerWidth());
+  };
+  input.on('focus',function() {
+    this.select();
+    input.autocomplete('search','');
+  }).on('change',function(event) {
+    // Search text is not a settings change and must never reach signal().
+    event.stopPropagation();
+  }).on('keydown',function(event) {
+    if (event.key == 'Enter') event.preventDefault();
+  });
+  $('<button type="button"><i class="fa fa-chevron-down" aria-hidden="true"></i></button>')
+    .attr('aria-label',"_(Show time zones)_")
+    .on('mousedown',function(event) { event.preventDefault(); })
+    .on('click',function() {
+      if (menu.is(':visible')) {
+        input.autocomplete('close');
+      } else {
+        input.trigger('focus');
+        input.autocomplete('search','');
+      }
+    }).appendTo(picker);
+  select.on('change',function() { input.val(select.find(':selected').text()); }).hide();
+}
+
 $(function() {
   var form = document.datetime_settings;
   presetTime(form);
   oldDate = form.display_date.selectedIndex;
   oldTime = form.display_time.selectedIndex;
   oldZone = form.timeZone.selectedIndex;
+  timezonePicker($(form.timeZone));
   form.USE_NTP.selectedIndex = <?=_var($PTP,'SYNC') == 'yes' ? 1 : ($var['USE_NTP'] == 'yes' ? 0 : 2)?>;
 <?if (empty($ports)):?>
   if (form.USE_NTP.selectedIndex==1) $('#noports').show();
