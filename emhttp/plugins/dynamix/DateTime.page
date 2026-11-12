@@ -46,16 +46,8 @@ foreach ($ports as $port) {
     $hwclock[$port] = exec("ethtool -T $port|grep -Pom1 '^PTP Hardware Clock: \K.+'") == 'none' ? 'disabled' : '';
 }
 ?>
-<style>
-.timezone-picker {display:inline-block; position:relative; width:100%; max-width:400px;}
-.Theme--sidebar .timezone-picker {max-width:314px;}
-.timezone-picker input.timezone-input {min-height:0; line-height:normal;}
-.timezone-picker button[type="button"] {position:absolute; top:0; right:0; bottom:0; width:22px; min-width:0; margin:0; padding:0; border:0; border-radius:0; background:none;}
-.timezone-picker button[type="button"]:hover {background:none; color:inherit;}
-.timezone-picker button[type="button"]:focus-visible {outline:1px solid var(--text-color); outline-offset:2px;}
-.timezone-options {max-height:240px; overflow-y:auto; overflow-x:hidden; background:var(--background-color); color:var(--text-color); border-color:var(--border-color); font-family:inherit; font-size:inherit;}
-.timezone-options .ui-menu-item-wrapper {overflow-wrap:anywhere;}
-</style>
+<link type="text/css" rel="stylesheet" href="<?php autov('/webGui/styles/jquery.searchable-select.css') ?>">
+<script src="<?php autov('/webGui/javascript/jquery.searchable-select.js') ?>"></script>
 <form markdown="1" name="datetime_settings" method="POST" action="/update.htm" target="progressFrame" onchange="signal(this)">
 <input type="hidden" name="setDateTime" value="apply">
 
@@ -327,79 +319,13 @@ function timeState() {
   timers.timeState = setTimeout(timeState,2000);
 }
 
-// Keep the select as the source of truth for Apply and timezone reset handling.
-function timezonePicker(select) {
-  if (!$.fn.autocomplete) return;
-  var options = select.find('option').map(function() {
-    return {label:$(this).text(), value:this.value, option:this};
-  }).get();
-  var picker = $('<span class="timezone-picker"></span>').insertAfter(select);
-  var input = $('<input type="text" class="lock timezone-input" autocomplete="off" spellcheck="false">')
-    .attr({'aria-label':select.attr('aria-label'), role:'combobox',
-      'aria-autocomplete':'list', 'aria-expanded':'false'})
-    .val(select.find(':selected').text()).appendTo(picker);
-  input.autocomplete({
-    minLength:0,
-    source:function(request,response) {
-      var term = request.term.toLowerCase().replace(/_/g,' ');
-      response(options.filter(function(item) {
-        return (item.label+' '+item.value).toLowerCase().replace(/_/g,' ').indexOf(term) != -1;
-      }));
-    },
-    focus:function() {
-      input.attr('aria-activedescendant',menu.find('.ui-state-active').attr('id'));
-      return false;
-    },
-    select:function(event,ui) {
-      input.val(ui.item.label);
-      if (!ui.item.option.selected) {
-        ui.item.option.selected = true;
-        select.trigger('change');
-      }
-      return false;
-    },
-    change:function() { input.val(select.find(':selected').text()); },
-    open:function() {
-      menu.find('.ui-menu-item-wrapper').attr('role','option');
-      input.attr('aria-expanded','true');
-    },
-    close:function() { input.attr('aria-expanded','false').removeAttr('aria-activedescendant'); }
-  });
-  var menu = input.autocomplete('widget').addClass('timezone-options').attr('role','listbox');
-  input.attr('aria-controls',menu.attr('id'));
-  input.autocomplete('instance')._resizeMenu = function() {
-    menu.outerWidth(picker.outerWidth());
-  };
-  input.on('focus',function() {
-    this.select();
-    input.autocomplete('search','');
-  }).on('change',function(event) {
-    // Search text is not a settings change and must never reach signal().
-    event.stopPropagation();
-  }).on('keydown',function(event) {
-    if (event.key == 'Enter') event.preventDefault();
-  });
-  $('<button type="button"></button>')
-    .attr('aria-label',"_(Show time zones)_")
-    .on('mousedown',function(event) { event.preventDefault(); event.stopPropagation(); })
-    .on('click',function() {
-      if (menu.is(':visible')) {
-        input.autocomplete('close');
-      } else {
-        input.trigger('focus');
-        input.autocomplete('search','');
-      }
-    }).appendTo(picker);
-  select.on('change',function() { input.val(select.find(':selected').text()); }).hide();
-}
-
 $(function() {
   var form = document.datetime_settings;
   presetTime(form);
   oldDate = form.display_date.selectedIndex;
   oldTime = form.display_time.selectedIndex;
   oldZone = form.timeZone.selectedIndex;
-  timezonePicker($(form.timeZone));
+  if ($.fn.searchableSelect) $(form.timeZone).searchableSelect({buttonLabel:"_(Show time zones)_"});
   form.USE_NTP.selectedIndex = <?=_var($PTP,'SYNC') == 'yes' ? 1 : ($var['USE_NTP'] == 'yes' ? 0 : 2)?>;
 <?if (empty($ports)):?>
   if (form.USE_NTP.selectedIndex==1) $('#noports').show();
