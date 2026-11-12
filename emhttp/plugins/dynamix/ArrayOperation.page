@@ -350,12 +350,24 @@ function stopMover(button) {
     html:true,
     showCancelButton:true,
     confirmButtonText:"_(Stop)_",
-    cancelButtonText:"_(Cancel)_"
+    cancelButtonText:"_(Cancel)_",
+    closeOnConfirm:false,
+    showLoaderOnConfirm:true
   },function(p){
     if (!p) return;
     button.disabled = true;
-    $.post('/webGui/include/MoverStop.php');
+    $.post('/webGui/include/MoverStop.php',function(data){
+      if (data.code != 0) {stopMoverFailed(button,data.result); return;}
+      swal.close();
+    },'json').fail(function(xhr,status,error){
+      stopMoverFailed(button,(xhr.responseJSON && xhr.responseJSON.error) || "_(Request failed)_"+(xhr.status ? ' (HTTP '+xhr.status+' '+error+')' : ''));
+    });
   });
+}
+
+function stopMoverFailed(button, reason) {
+  button.disabled = false;
+  swal({title:"_(Mover not stopped)_",text:$('<div>').text(reason).html(),type:'error',html:true,confirmButtonText:"_(Ok)_"});
 }
 
 function pauseParity(form) {
