@@ -47,10 +47,12 @@ foreach ($ports as $port) {
 }
 ?>
 <style>
-.timezone-picker {display:inline-flex; width:360px; max-width:100%; align-items:center;}
-.timezone-picker input {min-width:0;}
-.timezone-picker button {min-width:32px; margin:0; padding:8px;}
-.timezone-picker input:focus {outline:1px solid var(--text-color);}
+.timezone-picker {display:inline-block; position:relative; width:100%; max-width:400px;}
+.Theme--sidebar .timezone-picker {max-width:314px;}
+.timezone-picker input.timezone-input {min-height:0; line-height:normal;}
+.timezone-picker button[type="button"] {position:absolute; top:0; right:0; bottom:0; width:22px; min-width:0; margin:0; padding:0; border:0; border-radius:0; background:none;}
+.timezone-picker button[type="button"]:hover {background:none; color:inherit;}
+.timezone-picker button[type="button"]:focus-visible {outline:1px solid var(--text-color); outline-offset:2px;}
 .timezone-options {max-height:240px; overflow-y:auto; overflow-x:hidden; background:var(--background-color); color:var(--text-color); border-color:var(--border-color); font-family:inherit; font-size:inherit;}
 .timezone-options .ui-menu-item-wrapper {overflow-wrap:anywhere;}
 </style>
@@ -332,7 +334,7 @@ function timezonePicker(select) {
     return {label:$(this).text(), value:this.value, option:this};
   }).get();
   var picker = $('<span class="timezone-picker"></span>').insertAfter(select);
-  var input = $('<input type="text" class="lock" autocomplete="off" spellcheck="false">')
+  var input = $('<input type="text" class="lock timezone-input" autocomplete="off" spellcheck="false">')
     .attr({'aria-label':select.attr('aria-label'), role:'combobox',
       'aria-autocomplete':'list', 'aria-expanded':'false'})
     .val(select.find(':selected').text()).appendTo(picker);
@@ -377,9 +379,9 @@ function timezonePicker(select) {
   }).on('keydown',function(event) {
     if (event.key == 'Enter') event.preventDefault();
   });
-  $('<button type="button"><i class="fa fa-chevron-down" aria-hidden="true"></i></button>')
+  $('<button type="button"></button>')
     .attr('aria-label',"_(Show time zones)_")
-    .on('mousedown',function(event) { event.preventDefault(); })
+    .on('mousedown',function(event) { event.preventDefault(); event.stopPropagation(); })
     .on('click',function() {
       if (menu.is(':visible')) {
         input.autocomplete('close');
