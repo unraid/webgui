@@ -97,6 +97,7 @@
       });
       this._on($(select[0].labels), {
         click:function(event) {
+          if (this.picker[0].contains(event.target)) return;
           event.preventDefault();
           this.input.trigger('focus');
         }
