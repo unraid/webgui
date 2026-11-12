@@ -102,7 +102,7 @@
         }
       });
       if (select[0].form) {
-        this._on($(select[0].form), {
+        this._on(true,$(select[0].form), {
           reset:function() {
             clearTimeout(this.resetTimer);
             this.resetTimer = this._delay('refresh');
