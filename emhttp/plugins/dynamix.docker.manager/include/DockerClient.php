@@ -902,7 +902,7 @@ class DockerClient {
 				}
 			}
 			if ($holder) $hint = sprintf(_('Container %s already uses IP address %s. Stop it or give this container a different IP address in its settings'), $holder, $ip);
-			else $hint = _('Another container already uses the IP address of this container. Stop it or give this container a different IP address in its settings');
+			else $hint = _('A fixed IP address of this container is already in use. Check the network settings of this container');
 		} elseif (stripos($message, 'custom device') !== false) {
 			$hint = _('Check that the device exists, or remove it from the settings of this container');
 		} elseif (stripos($message, 'bind source path does not exist') !== false || stripos($message, 'invalid mount config') !== false) {
