@@ -1,30 +1,8 @@
 {
   "disposition": "PATCH",
-  "expected_structural_delta": "One shared JS widget (about 160-220 lines), one CSS asset (about 50 lines), one documentation section and one consumer initialization. Delete about 85 page-local lines. Native select remains the sole value owner; no dependency, service, persistence or cross-repo contract.",
-  "minimum_design": "Extract one opt-in jQuery UI widget and stylesheet, reuse bundled autocomplete and native select theme rules, and replace page-local behavior with initialization. Keep native select authoritative and each widget isolated.",
-  "outcome": "Provide a reusable searchable single-select control and use it for Date and Time while preserving native form values and dropdown appearance.",
-  "reuse_decisions": [
-    {
-      "decision": "reuse",
-      "name": "Bundled jQuery UI widget/autocomplete",
-      "rationale": "Existing lifecycle and keyboard primitives avoid a dependency or copied state engine."
-    },
-    {
-      "decision": "reuse",
-      "name": "Opt-in shared asset loading",
-      "rationale": "Existing pages include shared jQuery plugins and CSS through autov; no global initialization is needed."
-    },
-    {
-      "decision": "extend",
-      "name": "Native select and theme rules",
-      "rationale": "Preserve submitted value, change, reset and disabled behavior while sharing its visual treatment."
-    },
-    {
-      "decision": "new owner",
-      "name": "Shared searchable select widget",
-      "rationale": "User explicitly requests reusable assets; one owner replaces page-local behavior and prevents copying it into new consumers."
-    }
-  ],
+  "forecast_commit": "ef5e977df579d26255ac303eb05c7c2df99ddea2",
+  "reviewed_sha": "ad4b776d48b784c48fdeb192852109d49c1369e5",
   "schema": "limetech.ai-review-marker.v2",
-  "stage": "forecast"
+  "stage": "final",
+  "unresolved_proportionality_findings": []
 }
