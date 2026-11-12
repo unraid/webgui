@@ -889,20 +889,19 @@ class DockerClient {
 		if (preg_match('/(?:Bind for|host port for) [^ ]*?:(\d+)/', $message, $port)) {
 			$hint = sprintf(_('Another container or service already uses host port %s. Stop it or change the port in the settings of this container'), $port[1]);
 		} elseif (stripos($message, 'address already in use') !== false) {
-			// Docker's message does not name the address: read the fixed IP from the container and look for its holder
+			// Docker's message does not name the address: check each fixed IP of the container for a holder on that network,
+			// and name an address only when another container is found to hold it
 			$holder = '';
 			$ct     = $this->getContainerDetails($id);
 			foreach ($ct['NetworkSettings']['Networks'] ?? [] as $net => $vals) {
-				$ip = $vals['IPAMConfig']['IPv4Address'] ?? '';
-				if ($ip == '') continue;
+				$fixed = $vals['IPAMConfig']['IPv4Address'] ?? '';
+				if ($fixed == '') continue;
 				foreach ($this->getDockerContainers() as $other) {
 					if ($other['Id'] == $this->extractID($ct['Id'] ?? '')) continue;
-					if (($other['Networks'][$net]['IPAddress'] ?? '') == $ip) {$holder = $other['Name']; break 2;}
+					if (($other['Networks'][$net]['IPAddress'] ?? '') == $fixed) {$holder = $other['Name']; $ip = $fixed; break 2;}
 				}
-				break;
 			}
-			if ($ip && $holder) $hint = sprintf(_('Container %s already uses IP address %s. Stop it or give this container a different IP address in its settings'), $holder, $ip);
-			elseif ($ip) $hint = sprintf(_('Another container already uses IP address %s. Stop it or give this container a different IP address in its settings'), $ip);
+			if ($holder) $hint = sprintf(_('Container %s already uses IP address %s. Stop it or give this container a different IP address in its settings'), $holder, $ip);
 			else $hint = _('Another container already uses the IP address of this container. Stop it or give this container a different IP address in its settings');
 		} elseif (stripos($message, 'custom device') !== false) {
 			$hint = _('Check that the device exists, or remove it from the settings of this container');
