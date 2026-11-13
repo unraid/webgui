@@ -223,7 +223,7 @@ if (isset($_POST['contName'])) {
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
   }
   if ($startContainer) $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
-  execCommand($cmd);
+  execCommand($cmd, true, $Name);
   connectExtraNetworks($Name, $_POST['contExtraNetworks'] ?? '', $_POST['contNetwork'] ?? '', true);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
 
@@ -302,7 +302,7 @@ if (isset($_GET['updateContainer'])){
       // Remove preliminary container
       exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
     }
-    execCommand($cmd, $echo);
+    execCommand($cmd, $echo, $Name);
     connectExtraNetworks($Name, getXmlVal($xml, "ExtraNetworks"), $Network, $echo);
     if ($startContainer) addRoute($Name); // add route for remote WireGuard access
     $DockerClient->flushCaches();
