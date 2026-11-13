@@ -14,6 +14,8 @@ Cond="(_var($var,'SYS_ARRAY_SLOTS') > 0 || $var['fsState']=='Stopped')"
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  */
+$array_ctx = array_context(_var($page,'ArrayId',1));
+if ($array_ctx['id'] > 1) {$array_vars = array_context_vars($array_ctx); $array_host = compact(array_keys($array_vars)); extract($array_vars);}
 $power = _var($display,'power') && in_array('nvme',array_column(main_filter($disks),'transport')) ? _('Power').' / ' : '';
 
 // Check for deprecated filesystems using shared function
@@ -60,3 +62,4 @@ $('#tab1').bind({click:function() {$('i.toggle').show('slow');}});
 <?if (_var($var,'fsState')=="Stopped"):?>
 :main_slots_help:
 <?endif;?>
+<?if ($array_ctx['id'] > 1) extract($array_host);?>

@@ -16,6 +16,8 @@ Nchan="device_list,disk_load,parity_list"
  */
 ?>
 <?
+$array_ctx = array_context(_var($page,'ArrayId',1));
+if ($array_ctx['id'] > 1) {$array_vars = array_context_vars($array_ctx); $array_host = compact(array_keys($array_vars)); extract($array_vars);}
 $keyfile = file_exists(_var($var,'luksKeyfile'));
 $spot    = _var($var,'mdResyncPos',0)>0;
 $poolsOnly = (_var($var,'SYS_ARRAY_SLOTS') == 0 ) ? true : false;
@@ -124,7 +126,7 @@ function toggle_state(device, name, action) {
     button = '[id^=button-]';
   }
   devices.stop();
-  $.post('/webGui/include/ToggleState.php', {device:device,name:name,action:action}, function(){setTimeout(function(){devices.start();},1000);if (button) $(button).prop('disabled',false);});
+  $.post('<?=$array_ctx['toggle']?>', {device:device,name:name,action:action}, function(){setTimeout(function(){devices.start();},1000);if (button) $(button).prop('disabled',false);});
 }
 
 function display_diskio() {
@@ -343,7 +345,7 @@ function stopParity(form, text) {
 }
 
 function pauseParity(form) {
-  $.post('/webGui/include/ParityControl.php',{action:'pause'},function(){
+  $.post('<?=$array_ctx['parity']?>',{action:'pause'},function(){
     $('#pauseButton').val("_(Resume)_").prop('disabled',true).prop('onclick',null).off('click').click(function(){resumeParity(form);});
     $(form).append('<input type="hidden" name="cmdCheckPause" value="">');
     form.submit();
@@ -351,7 +353,7 @@ function pauseParity(form) {
 }
 
 function resumeParity(form) {
-  $.post('/webGui/include/ParityControl.php',{action:'resume'},function(){
+  $.post('<?=$array_ctx['parity']?>',{action:'resume'},function(){
     $('#pauseButton').val("_(Pause)_").prop('disabled',true).prop('onclick',null).off('click').click(function(){pauseParity(form);});
     $(form).append('<input type="hidden" name="cmdCheckResume" value="">');
     form.submit();
@@ -438,7 +440,7 @@ function hideMoverRows() {
 }
 
 <?if (_var($var,'fsState') == 'Started'):?>
-var mymonitor = new NchanSubscriber('/sub/mymonitor',{subscriber:'websocket', reconnectTimeout:5000});
+var mymonitor = new NchanSubscriber('/sub/mymonitor<?=$array_ctx['suffix']?>',{subscriber:'websocket', reconnectTimeout:5000});
 mymonitor.on('message', function(state) {
   switch (state) {
   case '0': // normal operation
@@ -507,13 +509,13 @@ mymonitor.on('message', function(state) {
 mymonitor.start();
 <?endif;?>
 
-var arraymonitor = new NchanSubscriber('/sub/arraymonitor',{subscriber:'websocket', reconnectTimeout:5000});
+var arraymonitor = new NchanSubscriber('/sub/arraymonitor<?=$array_ctx['suffix']?>',{subscriber:'websocket', reconnectTimeout:5000});
 arraymonitor.on('message', function(state) {
   if (state == 1 && !timers.arraymonitor) timers.arraymonitor = setTimeout(refresh,1250);
 });
 
 <?if (_var($var,'shareMoverProgress','no') === 'yes'):?>
-var moverStatus = new NchanSubscriber('/sub/mover',{subscriber:'websocket'});
+var moverStatus = new NchanSubscriber('/sub/mover<?=$array_ctx['suffix']?>',{subscriber:'websocket'});
 moverStatus.on('message', function(moverdata) {
   var moverlines = 0;
   var selectlines = [] ;
@@ -548,7 +550,7 @@ moverStatus.on('disconnect', hideMoverRows);
 moverStatus.start();
 <?endif;?>
 
-var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscriber:'websocket', reconnectTimeout:5000});
+var devices = new NchanSubscriber('/sub/devices<?=$array_ctx['suffix']?><?=$spot?",parity{$array_ctx['suffix']}":""?>',{subscriber:'websocket', reconnectTimeout:5000});
 devices.on('message', function(msg, meta) {
   switch (<?if($spot):?>meta.id.channel()<?else:?>0<?endif;?>) {
   case 0:
@@ -599,7 +601,7 @@ devices.on('message', function(msg, meta) {
 devices.start();
 
 <?if (substr(_var($var,'fsState'),-3) == 'ing'):?>
-var fsState = new NchanSubscriber('/sub/fsState',{subscriber:'websocket', reconnectTimeout:5000});
+var fsState = new NchanSubscriber('/sub/fsState<?=$array_ctx['suffix']?>',{subscriber:'websocket', reconnectTimeout:5000});
 fsState.on('message', function(msg) {
   switch (msg) {
   case 'stop':
@@ -614,14 +616,14 @@ fsState.start();
 <?elseif ($spot):?>
 setTimeout(function(){$('#pauseButton').prop('disabled',false);$('#cancelButton').prop('disabled',false);},250);
 <?else:?>
-var paritymonitor = new NchanSubscriber('/sub/paritymonitor',{subscriber:'websocket', reconnectTimeout:5000});
+var paritymonitor = new NchanSubscriber('/sub/paritymonitor<?=$array_ctx['suffix']?>',{subscriber:'websocket', reconnectTimeout:5000});
 paritymonitor.on('message', function(busy){if (busy == 1) refresh();});
 setTimeout(function(){paritymonitor.start();},5000);
 <?endif;?>
 
 $(function(){
 // Create ping listener for parity monitor and device info to monitor for listeners
-  var mainPingListener = new NchanSubscriber('/sub/mainPingListener',{subscriber:'websocket', reconnectTimeout:5000});
+  var mainPingListener = new NchanSubscriber('/sub/mainPingListener<?=$array_ctx['suffix']?>',{subscriber:'websocket', reconnectTimeout:5000});
   mainPingListener.on('message', function(msg){});
   mainPingListener.start();
 
@@ -655,7 +657,7 @@ window.onunload = function(){
 <?endif;?>
 }
 </script>
-<form name="arrayOps" method="POST" action="/update.htm" target="progressFrame">
+<form name="arrayOps" method="POST" action="<?=$array_ctx['update']?>" target="progressFrame">
 <input type="hidden" name="startState" value="<?=htmlspecialchars(_var($var,'mdState'))?>">
 <input type="hidden" name="file" value="">
 
@@ -694,7 +696,7 @@ window.onunload = function(){
 <?      endif;?>
 <?      if (!$poolsOnly):?>
         <tr><td></td><td><input type="button" value="_(History)_" onclick="parityHistory()"></td>
-<?      [$date, $duration, $speed, $status, $error, $action, $size] = last_parity_log();
+<?      [$date, $duration, $speed, $status, $error, $action, $size] = last_parity_log("{$array_ctx['config']}/parity-checks.log");
         if (_var($var,'sbSyncExit',0) != 0):?>
           <td class="whitespace-normal"><?=sprintf(_('Last check incomplete on **%s**'),_(my_time(_var($var,'sbSynced2',0)).day_count(_var($var,'sbSynced2',0)),0))?><?if (_var($var,'sbSynced2')):?>
           <br><i class="fa fa-fw fa-dot-circle-o"></i> _(Error code)_: <?=my_error(_var($var,'sbSyncExit'))?>
@@ -758,7 +760,7 @@ window.onunload = function(){
         </span></td>
         <td id="cancelText"><?if (_var($var,'mdResync')):?>**_(Pause)_** _(will pause Read-Check)_.<?else:?>**_(Resume)_** _(will resume Read-Check)_.<?endif;?><br>**_(Cancel)_** _(will stop Read-Check)_.</td></tr>
 <?    endif;
-      $stamps = '/var/tmp/stamps.ini';
+      $stamps = "{$array_ctx['tmp']}/stamps.ini";
       $synced = file_exists($stamps) ? explode(',',file_get_contents($stamps)) : [];
       $sbSynced = array_shift($synced) ?: _var($var,'sbSynced');
       $sbUpdate = _var($var,'mdResyncDt') ? $sbSynced : _var($var,'sbUpdated');?>
@@ -940,7 +942,7 @@ endswitch;
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 <?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
-<form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
+<form name="mover_schedule" method="POST" action="<?=$array_ctx['update']?>" target="progressFrame">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Move)_"></td><td id="mover-text"></td></tr>
  <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>
@@ -952,7 +954,7 @@ endswitch;
 </form>
 <?endif;?>
 <?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
-<form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
+<form name="mover_schedule" method="POST" action="<?=$array_ctx['update']?>" target="progressFrame">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
 <tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Empty)_"></td><td id="mover-text"></td></tr>
  <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>
@@ -972,7 +974,7 @@ endswitch;
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 </form>
-<?endif;?><!-- markdown fix -->
+<?endif;?><!-- markdown fix --><?if ($array_ctx['id'] == 1):?>
 <form name="shutdownOps" method="POST" action="/webGui/include/Boot.php">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
  <tr><td></td><td><span class="buttons-spaced"><input type="button" name="reboot" value="_(Reboot)_" onclick="shutdown_now(this.form,'reboot')"><input type="button" name="shutdown" value="_(Shutdown)_" onclick="shutdown_now(this.form,'shutdown')"></span></td>
@@ -980,6 +982,7 @@ endswitch;
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 </form>
+<?endif;?>
 <!-- markdown fix --></p><?if (isset($display['sleep'])) eval('?>'.parse_file($display['sleep']))?>
 
 :array_status_help:
@@ -991,3 +994,4 @@ endswitch;
 :encryption_help:
 <?endif;?>
 <?endif;?>
+<?if ($array_ctx['id'] > 1) extract($array_host);?>
