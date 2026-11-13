@@ -16,5 +16,10 @@ require_once "$docroot/webGui/include/Encryption.php";
 
 $_POST['AuthPass'] = base64_encrypt($_POST['AuthPass']);
 // The display name goes into the From header: replace control characters, a CR/LF would start a new header.
-$_POST['SenderName'] = trim(preg_replace('/[\x00-\x1F\x7F]+/', ' ', $_POST['SenderName'] ?? ''));
+// update.php writes it inside INI double quotes unescaped, and the config loader (my_parse_ini_string) decodes
+// HTML entities and strips tags; the INI parser also expands ${...}. So " is saved as ', < > { } as ( ) ( ), \ is
+// removed (the page sends a typed " as \"), and an & that starts an entity is saved as &amp; so the name loads back as typed.
+$name = preg_replace('/[\x00-\x1F\x7F]+/', ' ', $_POST['SenderName'] ?? '');
+$name = strtr($name, ['\\"' => "'", '"' => "'", '\\' => '', '<' => '(', '>' => ')', '{' => '(', '}' => ')']);
+$_POST['SenderName'] = trim(preg_replace('/&(?=#?[A-Za-z0-9]+;)/', '&amp;', $name));
 ?>
