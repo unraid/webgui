@@ -129,7 +129,7 @@ _(Enable VMs)_:
   </select>
 <?if ($hardware):?>
 <?if (!$started):?>
-  <span id="arraystopped"><i class="fa fa-warning icon warning"></i> <?=($libvirt_service == 'enable') ? '_(VMs will be available after Array is Started)_' : '_(Apply to activate VMs after Array is Started)_'?></span>
+  <span id="arraystopped"><i class="fa fa-warning icon warning"></i> <?=($libvirt_service == 'enable') ? '_(VMs will be available after array and/or pools are Started)_' : '_(Apply to activate VMs after array and/or pools are Started)_'?></span>
 <?endif;?>
 <?endif;?>
 
@@ -170,7 +170,7 @@ _(Libvirt storage location)_:
 <?if (file_exists($domain_cfg['IMAGE_FILE'])):?>
   <span id="deletePanel"><label><input type="checkbox" id="deleteCheckbox" /> _(Delete Image File)_</label></span><?endif;?>
 <?if (!$started):?>
-  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
+  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until array and/or pools are Started)_</span>
 <?endif;?>
   <span id="IMAGE_ERROR" class="errortext"></span>
 
@@ -180,7 +180,7 @@ _(Libvirt storage location)_:
 _(Default VM storage path)_:
 : <input type="text" id="domaindir" name="DOMAINDIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="/mnt" value="<?=htmlspecialchars($domain_cfg['DOMAINDIR'])?>" placeholder="_(Click to Select)_" pattern="^[^\\]*/$" onchange="validatePath(this)">
 <?if (!$started):?>
-  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
+  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until array and/or pools are Started)_</span>
 <?endif;?>
 
 :vms_libvirt_storage_help:
@@ -188,7 +188,7 @@ _(Default VM storage path)_:
 _(Default ISO storage path)_:
 : <input type="text" id="mediadir" name="MEDIADIR" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" data-pickroot="<?=is_dir('/mnt/user') ? '/mnt/user' : '/mnt'?>" value="<?=htmlspecialchars($domain_cfg['MEDIADIR'])?>" placeholder="_(Click to Select)_" pattern="^[^'\\]*/$">
 <?if (!$started):?>
-  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until Array is Started)_</span>
+  <span><i class="fa fa-warning icon warning"></i> _(Modify with caution: unable to validate path until array and/or pools are Started)_</span>
 <?endif;?>
 
 :vms_libvirt_iso_storage_help:
