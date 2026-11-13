@@ -786,6 +786,78 @@ function setXmlVal(&$xml, $value, $el, $attr=null, $pos=0) {
   $xml = $dom->saveXML();
 }
 
+// One rebuild of network dependents at a time (Apply, update scripts, Docker tab, background wait)
+function networkDependentsLock() {
+  static $lock;
+  if (!$lock) {
+    $lock = fopen('/var/run/dockerman-netdep.lock','ce');
+    flock($lock,LOCK_EX);
+  }
+}
+
+// Rebuild from their user template the containers that use the network of a container that was just recreated.
+// Without this they keep running with only loopback until someone opens the Docker tab.
+// A rebuilt dependent that is itself a network container gets its own dependents rebuilt, once.
+// Returns the messages that were also written to syslog.
+// In a task window $show($line) prints a line and $rebuild($name,$cmd) removes and recreates a container with its output,
+// like the update above it; without them the rebuild runs silently.
+function rebuildNetworkDependents($names, $wait=false, $show=null, $rebuild=null) {
+  global $docroot;
+  $script = "$docroot/plugins/dynamix.docker.manager/scripts";
+  $queue = array_values(array_filter((array)$names));
+  $parents = $handled = $log = [];
+  networkDependentsLock();
+  while (($parent = array_shift($queue)) !== null) {
+    if (isset($parents[$parent])) continue;
+    $parents[$parent] = true;
+    $orphans = array_diff_key(DockerUtil::networkOrphans($parent),$handled);
+    if (!$orphans) continue;
+    $state = DockerUtil::docker("inspect --format='{{.State.Running}}' ".escapeshellarg($parent));
+    if ($state == 'false' && !$wait) {
+      // created but not started yet, e.g. Auto Update starts it after the update: wait for it in the background
+      exec("nohup $script/rebuild_dependents ".escapeshellarg($parent)." >/dev/null 2>&1 &");
+      if ($show) $show(sprintf(_('Containers that use the network of %s are rebuilt once it starts: it was created but not started (for example it was stopped before the update), and they need it running'),$parent));
+      continue;
+    }
+    if ($show) $show(sprintf(_('Rebuilding containers that use the network of %s: it was recreated, which left them with only loopback (for example apps routed through a VPN container lose their connection)'),$parent));
+    foreach ($orphans as $name => $tmpl) {
+      $handled[$name] = true;
+      if (!$tmpl) {
+        $msg = "skipped $name: its network container was recreated or removed, but $name has no Docker template to rebuild it from (for example it was created with docker run or compose); recreate it to restore its network";
+      } elseif ($state != 'true') {
+        $msg = "did not rebuild $name: its network container $parent is not running (for example it was updated while stopped); start $parent and open the Docker tab to rebuild $name";
+      } else {
+        $running = DockerUtil::docker("inspect --format='{{.State.Running}}' ".escapeshellarg($name)) == 'true';
+        if ($rebuild) {
+          // the same command as rebuild_container
+          [$cmd] = xmlToCommand($tmpl);
+          $rebuild($name, $running ? str_replace('/docker create ','/docker run -d ',$cmd) : $cmd);
+        } else {
+          exec("$script/rebuild_container ".escapeshellarg($name).' '.($running ? 'running' : 'stopped').' >/dev/null 2>&1');
+        }
+        $rebuilt = DockerUtil::ctMap(escapeshellarg($name),'Id') && !isset(DockerUtil::networkOrphans($parent)[$name]);
+        if ($rebuilt && $running && DockerUtil::docker("inspect --format='{{.State.Running}}' ".escapeshellarg($name)) != 'true') {
+          // created with the new network, but docker run could not start it; not "rebuilt ...", so the task window shows it
+          $msg = "$name did not start after it was rebuilt for its recreated network container $parent (for example its command or a file it needs is missing); see the log of $name, then start it";
+        } elseif ($rebuilt) {
+          $msg = "rebuilt $name: its network container $parent was recreated, which had left $name with only loopback";
+          $queue[] = $name;
+        } elseif (DockerUtil::ctMap(escapeshellarg($name),'Id')) {
+          $msg = "could not rebuild $name after its network container $parent was recreated; open the Docker tab or Apply $name to retry";
+        } else {
+          // the rebuild removes the container before it creates it again, so a failed create leaves nothing to retry from the Docker tab
+          $msg = "could not rebuild $name after its network container $parent was recreated: $name was removed, but creating it again failed (for example a value in its template is not valid); select $name under Add Container > Template > User templates, correct it and Apply";
+        }
+      }
+      my_logger($msg,'docker');
+      $log[] = $msg;
+      // a successful rebuild already shows its command and result in the window
+      if ($show && strncmp($msg,'rebuilt ',8)) $show($msg);
+    }
+  }
+  return $log;
+}
+
 function getAllocations() {
   global $DockerClient;
   $host = DockerUtil::host();

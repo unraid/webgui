@@ -68,6 +68,16 @@ function cpu_pinning() {
 ##   CREATE CONTAINER   ##
 ##########################
 
+// Rebuild of the containers that use the network of a recreated container, shown like the commands above it
+function netdepShow($line) {
+  echo "<p class=\"logLine\" id=\"logBody\"></p><script>addLog('<b>",addslashes(htmlspecialchars($line)),"</b>');</script>\n";
+  @flush();
+}
+function netdepRebuild($name, $cmd) {
+  removeContainer($name);
+  execCommand($cmd);
+}
+
 // Simple UI blocker used by create/update operations so the user can't keep clicking around mid-install.
 function dockerUIBlockerScript($enable) {
   if ($enable) {
@@ -223,9 +233,11 @@ if (isset($_POST['contName'])) {
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
   }
   if ($startContainer) $cmd = str_replace('/docker create ', '/docker run -d ', $cmd);
-  execCommand($cmd);
+  $created = execCommand($cmd);
   connectExtraNetworks($Name, $_POST['contExtraNetworks'] ?? '', $_POST['contNetwork'] ?? '', true);
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
+  // like the update paths: only a container that was created can be the network of others
+  if ($created) rebuildNetworkDependents($Name, false, 'netdepShow', 'netdepRebuild');
 
   dockerUIBlockerScript(false);
   echo '<div style="text-align:center"><button type="button" onclick="openTerminal(\'docker\',\''.addslashes($Name).'\',\'.log\')">'._('View Container Log').'</button> <button type="button" onclick="done()">'._('Done').'</button></div><br>';
@@ -243,6 +255,11 @@ if (isset($_GET['updateContainer'])){
     echo '<link type="text/css" rel="stylesheet" href="'.autov("/plugins/dynamix.docker.manager/sheets/AddContainer.css",true).'">';
     dockerUIBlockerScript(true);
     @flush();
+  } else {
+    // Docker tab rebuild: skip containers that were rebuilt since the tab listed them
+    networkDependentsLock();
+    $orphans = DockerUtil::networkOrphans();
+    $_GET['ct'] = array_filter((array)$_GET['ct'], function($ct) use ($orphans) {return !empty($orphans[unscript(urldecode($ct))]);});
   }
   foreach ($_GET['ct'] as $value) {
     $tmpl = $DockerTemplates->getUserTemplate(unscript(urldecode($value)));
@@ -271,14 +288,7 @@ if (isset($_GET['updateContainer'])){
       stopContainer($Name, false, $echo);
     }
     // check if network from another container is specified in xml (Network & ExtraParams)
-    if (preg_match('/^container:(.*)/', $Network)) {
-      $Net_Container = str_replace("container:", "", $Network);
-    } else {
-      preg_match("/--(?:net|network)(?:=|\s+)(['\"]?)container:([^'\"\s]+)\\1/", $ExtraParams, $NetworkParam);
-      if (!empty($NetworkParam[2])) {
-        $Net_Container = $NetworkParam[2];
-      }
-    }
+    $Net_Container = DockerUtil::templateNetworkContainer($xml);
     // check if the container still exists from which the network should be used, if it doesn't exist any more recreate container with network none and don't start it
     if (!empty($Net_Container)) {
       $Net_Container_ID = $DockerClient->getContainerID($Net_Container);
@@ -302,7 +312,7 @@ if (isset($_GET['updateContainer'])){
       // Remove preliminary container
       exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
     }
-    execCommand($cmd, $echo);
+    if (execCommand($cmd, $echo)) $netParents[] = $Name;
     connectExtraNetworks($Name, getXmlVal($xml, "ExtraNetworks"), $Network, $echo);
     if ($startContainer) addRoute($Name); // add route for remote WireGuard access
     $DockerClient->flushCaches();
@@ -310,6 +320,8 @@ if (isset($_GET['updateContainer'])){
     // remove old orphan image since it's no longer used by this container
     if ($oldImageID && $oldImageID != $newImageID) removeImage($oldImageID, $echo);
   }
+  // containers that use the network of an updated container are left with only loopback until rebuilt
+  rebuildNetworkDependents($netParents ?? [], false, $echo ? 'netdepShow' : null, $echo ? 'netdepRebuild' : null);
   if ($echo) {
     dockerUIBlockerScript(false);
   }

@@ -1269,6 +1269,41 @@ class DockerUtil {
 		return static::docker("inspect --format='{{.$type}}' $ct");
 	}
 
+	// Network container named in a user template (Network "container:<name>" or --net=container:<name> in Extra Parameters)
+	public static function templateNetworkContainer($tmpl) {
+		$network = getXmlVal($tmpl,'Network');
+		if (preg_match('/^container:(.+)/',$network,$match)) return $match[1];
+		preg_match("/--(?:net|network)(?:=|\s+)(['\"]?)container:([^'\"\s]+)\\1/",getXmlVal($tmpl,'ExtraParams'),$match);
+		return $match[2] ?? '';
+	}
+
+	// Containers that use the network of a container which no longer exists.
+	// Docker binds "--network container:<name>" to the ID of that container when the dependent starts,
+	// so recreating the network container (update, Apply) leaves the dependent with only loopback.
+	// Returns [name => user template or false]. With $target, only those whose template names $target,
+	// plus those without a template (their network container can no longer be told).
+	public static function networkOrphans($target='') {
+		$ids = $names = $orphans = [];
+		foreach (static::docker("ps -a --no-trunc --format='{{.ID}} {{.Names}}'",true) as $row) {
+			[$id,$name] = array_pad(explode(' ',$row,2),2,'');
+			$ids[$id] = $name;
+			$names[$name] = $id;
+		}
+		if (!$ids) return [];
+		$DockerTemplates = new DockerTemplates();
+		foreach (static::docker("inspect --format='{{.Name}} {{.HostConfig.NetworkMode}}' ".implode(' ',array_keys($ids)),true) as $row) {
+			[$name,$mode] = array_pad(explode(' ',ltrim($row,'/'),2),2,'');
+			if (strncmp($mode,'container:',10)) continue;
+			$net = substr($mode,10);
+			if (isset($ids[$net]) || isset($names[$net])) continue;
+			if (strlen($net) >= 12 && preg_grep('/^'.preg_quote($net,'/').'/',array_keys($ids))) continue;
+			$tmpl = $DockerTemplates->getUserTemplate($name);
+			if ($target && $tmpl && static::templateNetworkContainer($tmpl) != $target) continue;
+			$orphans[$name] = $tmpl;
+		}
+		return $orphans;
+	}
+
 	public static function port() {
 		static $cached;
 		if ($cached !== null) return $cached;
