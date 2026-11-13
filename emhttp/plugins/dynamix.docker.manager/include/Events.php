@@ -41,7 +41,14 @@ case 'start':
 			$arrResponse = ['success'=> _('For security reasons, containers with Network Type "Host" should not have Tailscale enabled. Please disable Tailscale in this container or change the Network Type of the container.')];
 			break;
 		}
-		$arrResponse = ['success' => $DockerClient->startContainer($container)];
+		$code = $DockerClient->startContainer($container,$error);
+		$num  = $DockerClient->statusNumber($code);
+		$arrResponse = ['success' => $code];
+		// any refusal except 304 (already started): show Docker's message, if any, and the status code
+		if ($code !== true && $num !== '' && $num != '304') {
+			my_logger("Container {$info[$key]['Name']} failed to start (HTTP $num): ".($error ?: $code));
+			$arrResponse = ['success' => $DockerClient->startErrorText($container,$error,$code)];
+		}
 	}
 	break;
 case 'pause':
