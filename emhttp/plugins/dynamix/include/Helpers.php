@@ -35,13 +35,15 @@ function my_scale($value, &$unit, $decimals=NULL, $scale=NULL, $kilo=1000) {
     if ($scale < 0 && round($value,-1) == 1000) {$value = 1; $base++;}
     $unit = $units[$base]._('B');
   }
-  return number_format($value, $decimals, $number[0], $value > 9999 ? $number[1] : '');
+  $thousands_sep = $number[1] ?? '';
+  return number_format($value, $decimals, $number[0], $value > 9999 ? $thousands_sep : '');
 }
 
 function my_number($value) {
   global $display;
   $number = _var($display,'number','.,');
-  return number_format($value, 0, $number[0], ($value >= 10000 ? $number[1] : ''));
+  $thousands_sep = $number[1] ?? '';
+  return number_format($value, 0, $number[0], $value >= 10000 ? $thousands_sep : '');
 }
 
 function my_time($time, $fmt=NULL) {
