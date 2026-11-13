@@ -145,7 +145,8 @@ case 'disklog':
   $sock = "/var/tmp/$name.sock";
   $ata  = exec("ls -n ".escapeshellarg("/sys/block/$name")."|grep -Pom1 'ata\\d+'");
   $dev  = $ata ? $name.'|'.$ata.'[.:]' : $name;
-  $exec = wait($name,"grep -P ".escapeshellarg($dev)." /var/log/syslog*");
+  // the log pattern stays quoted: run_cmd expands it itself and reads the logs oldest first
+  $exec = wait($name,"grep -P ".escapeshellarg($dev)." '/var/log/syslog*'");
   exec("ttyd-exec -s9 -om1 -i ".escapeshellarg($sock)." ".escapeshellarg($exec));
   break;
 case 'log':
