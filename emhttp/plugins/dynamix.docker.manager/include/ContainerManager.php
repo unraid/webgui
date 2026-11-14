@@ -31,7 +31,7 @@ foreach ($containers as $ct) {
   if ( $action == "start") {
     $key = array_search($ct,array_column($info,"Name"));
     if ( $key === false ) continue;
-    if ($info[$key]['NetworkMode'] == "host" && $info[$key]['Cmd'] == "/opt/unraid/tailscale")
+    if (effectiveNetwork($info[$key]['NetworkMode']) == "host" && in_array(strtok($info[$key]['Cmd'], ' '), ["/opt/unraid/tailscale", "/opt/unraid/netbird"]))
       continue;
   }
   DockerUtil::docker("$action $ct >/dev/null");

@@ -1,0 +1,188 @@
+#!/bin/sh
+# Copyright 2026, Lime Technology
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License version 2,
+# as published by the Free Software Foundation.
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+
+# Keep the setup key out of the environment of the daemon and the container's application
+NB_KEY="${NETBIRD_SETUP_KEY}"
+unset NETBIRD_SETUP_KEY
+
+exec_entrypoint() {
+  echo "Starting container..."
+  echo
+  echo "======================="
+  echo
+  eval "exec ${ORG_ENTRYPOINT} ${ORG_POSTARGS:-${ORG_CMD}}"
+}
+
+error_handler() {
+  echo "ERROR: Unraid Docker Hook script throw an error!"
+  echo "       Starting container without NetBird!"
+  echo
+  exec_entrypoint
+}
+
+echo "======================="
+echo
+echo "Executing Unraid Docker Hook for NetBird"
+echo
+
+if [ "$(id -u)" != "0" ]; then
+  echo "ERROR: No root privileges!"
+  error_handler
+fi
+
+if [ ! -f /usr/bin/netbird ]; then
+  echo "Detecting Package Manager..."
+  if which apt-get >/dev/null 2>&1; then
+    echo "Detected Advanced Package Tool!"
+    PACKAGES_UPDATE="apt-get update"
+    PACKAGES_INSTALL="apt-get -y install --no-install-recommends"
+  elif which apk >/dev/null 2>&1; then
+    echo "Detected Alpine Package Keeper!"
+    PACKAGES_UPDATE="apk update"
+    PACKAGES_INSTALL="apk add"
+  elif which pacman >/dev/null 2>&1; then
+    echo "Detected pacman Package Manager!"
+    PACKAGES_INSTALL="pacman -Syu --noconfirm"
+  else
+    echo "ERROR: Detection from Package Manager failed!"
+    error_handler
+  fi
+
+  echo "Installing packages..."
+  echo "Please wait..."
+  if [ ! -z "${PACKAGES_UPDATE}" ]; then
+    UPDATE_LOG=$(${PACKAGES_UPDATE} 2>&1)
+  fi
+  INSTALL_LOG=$(${PACKAGES_INSTALL} wget ca-certificates 2>&1)
+  if [ "$?" -eq 0 ]; then
+    echo "Packages installed!"
+    unset INSTALL_LOG
+  else
+    echo "ERROR: Installing packages!"
+    echo "${UPDATE_LOG}"
+    echo "${INSTALL_LOG}"
+    error_handler
+  fi
+
+  echo "NetBird not found, downloading..."
+  echo "Please wait..."
+
+  NETBIRD_VERSION=$(wget -qO- 'https://pkgs.netbird.io/releases/latest' | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+
+  if [ -z "${NETBIRD_VERSION}" ]; then
+    echo "ERROR: Can't get NetBird release information"
+    error_handler
+  fi
+
+  mkdir -p /tmp/netbird
+
+  if wget -q -O /tmp/netbird/netbird.tgz "https://github.com/netbirdio/netbird/releases/download/v${NETBIRD_VERSION}/netbird_${NETBIRD_VERSION}_linux_amd64.tar.gz"; then
+    echo "Download from NetBird version ${NETBIRD_VERSION} successful!"
+  else
+    echo "ERROR: Download from NetBird version ${NETBIRD_VERSION} failed!"
+    rm -rf /tmp/netbird
+    error_handler
+  fi
+
+  tar -C /tmp/netbird -xzf /tmp/netbird/netbird.tgz
+  cp /tmp/netbird/netbird /usr/bin/netbird
+  rm -rf /tmp/netbird
+
+  echo "Installation Done!"
+else
+  echo "NetBird found, continuing..."
+fi
+
+if [ ! -z "${NETBIRD_STATE_DIR}" ]; then
+  NB_STATE_DIR="${NETBIRD_STATE_DIR}"
+elif [ ! -z "${SERVER_DIR}" ]; then
+  NB_STATE_DIR="${SERVER_DIR}/.netbird_state"
+elif [ ! -z "${DATA_DIR}" ]; then
+  NB_STATE_DIR="${DATA_DIR}/.netbird_state"
+elif [ ! -z "${USER_HOME}" ]; then
+  NB_STATE_DIR="${USER_HOME}/.netbird_state"
+elif [ -d "/config" ]; then
+  NB_STATE_DIR="/config/.netbird_state"
+elif [ -d "/data" ]; then
+  NB_STATE_DIR="/data/.netbird_state"
+else
+  echo "ERROR: Couldn't detect persistent Docker directory for .netbird_state!"
+  echo "       Please enable NetBird Advanced Settings in the Docker template and set the NetBird State Directory manually!"
+  sleep infinity
+fi
+echo "Settings NetBird state dir to: ${NB_STATE_DIR}"
+# State outside a host mount survives restarts but not a recreate of the container
+NB_MOUNT="${NB_STATE_DIR%/}"
+while [ -n "${NB_MOUNT}" ] && ! grep -qs " ${NB_MOUNT} " /proc/mounts; do
+  case "${NB_MOUNT}" in */*) NB_MOUNT="${NB_MOUNT%/*}" ;; *) NB_MOUNT="" ;; esac
+done
+if [ -z "${NB_MOUNT}" ]; then
+  echo "WARNING: ${NB_STATE_DIR} is not on a host path, so NetBird must log in again whenever this container is recreated!"
+  echo "         Map that path to the host, or set the NetBird State Directory in the Advanced Settings to a mapped path."
+fi
+mkdir -p "${NB_STATE_DIR}"
+export NB_STATE_DIR
+
+if [ -z "${NETBIRD_USERSPACE_NETWORKING}" ] || [ "${NETBIRD_USERSPACE_NETWORKING}" = "true" ]; then
+  echo "Enabling userspace networking!"
+  # Without local forwarding the container's own services can't be reached over NetBird
+  export NB_USE_NETSTACK_MODE="true"
+  export NB_ENABLE_NETSTACK_LOCAL_FORWARDING="true"
+elif [ ! -c /dev/net/tun ]; then
+  echo "ERROR: Device /dev/net/tun not found!"
+  echo "       Make sure to pass through /dev/net/tun to the container and add the"
+  echo "       parameter --cap-add=NET_ADMIN to the Extra Parameters!"
+  error_handler
+fi
+
+echo "Starting NetBird daemon with log file location: /var/log/netbird.log"
+netbird service run --log-file /var/log/netbird.log >/dev/null 2>&1 &
+
+NB_WAIT=30
+until netbird status --check live >/dev/null 2>&1; do
+  NB_WAIT=$((NB_WAIT - 1))
+  if [ "${NB_WAIT}" -le 0 ]; then
+    echo "ERROR: NetBird daemon did not start!"
+    tail -20 /var/log/netbird.log
+    error_handler
+  fi
+  sleep 1
+done
+
+# The daemon reconnects by itself and "up" ignores new settings while connected,
+# so go down first or template changes would not apply after a restart.
+netbird down >/dev/null 2>&1
+
+# Always passed explicitly as the previous value persists in the state directory
+NB_PARAMS="--no-browser --allow-server-ssh=${NETBIRD_USE_SSH:-false}"
+if [ ! -z "${NETBIRD_HOSTNAME}" ]; then
+  echo "Setting host name to \"${NETBIRD_HOSTNAME}\""
+  NB_PARAMS="${NB_PARAMS} --hostname=$(echo "${NETBIRD_HOSTNAME}" | tr -d ' ')"
+fi
+# Pass the Cloud URL explicitly, or a cleared field keeps the previously saved server
+NETBIRD_MANAGEMENT_URL="${NETBIRD_MANAGEMENT_URL:-https://api.netbird.io:443}"
+echo "Using management server: ${NETBIRD_MANAGEMENT_URL}"
+NB_PARAMS="${NB_PARAMS} --management-url=${NETBIRD_MANAGEMENT_URL}"
+
+echo "Starting NetBird"
+if [ ! -z "${NB_KEY}" ]; then
+  NB_SETUP_KEY="${NB_KEY}" netbird up ${NB_PARAMS} ${NETBIRD_PARAMS}
+else
+  netbird up ${NB_PARAMS} ${NETBIRD_PARAMS}
+fi
+if [ "$?" != "0" ]; then
+  echo "ERROR: Connecting to NetBird not successful!"
+  echo "Please check the logs:"
+  tail -20 /var/log/netbird.log
+  error_handler
+fi
+unset NB_KEY
+
+exec_entrypoint

@@ -367,6 +367,11 @@ class DockerTemplates {
 					  $tmp['url'] = '';
 				}
 				// Check if webui & ct TSurl is set, if set construct WebUI URL on Docker page
+				$tmp['NBurl'] = '';
+				$NB_ip = strstr(DockerUtil::netbirdStatus($name)['netbirdIp'] ?? '', '/', true);
+				if (!empty($webui) && !empty($ct['NBHostname']) && $NB_ip) {
+					$tmp['NBurl'] = preg_replace(['/\[IP\]/', '/\[PORT:(\d{1,5})\]/'], [$NB_ip, '$1'], $webui);
+				}
 				$tmp['TSurl'] = '';
 				if (!empty($webui) && !empty($ct['TSUrl'])) {
 					$TS_no_peers = $this->getTailscaleJson($name);
@@ -1074,6 +1079,7 @@ class DockerClient {
 			$c['Url']         = $info['Config']['Labels']['net.unraid.docker.webui'] ?? false;
 			$c['TSUrl']       = $info['Config']['Labels']['net.unraid.docker.tailscale.webui'] ?? false;
 			$c['TSHostname']  = $info['Config']['Labels']['net.unraid.docker.tailscale.hostname'] ?? false;
+				$c['NBHostname']  = $info['Config']['Labels']['net.unraid.docker.netbird.hostname'] ?? false;
 			$c['Shell']       = $info['Config']['Labels']['net.unraid.docker.shell'] ?? false;
 			$c['Manager']     = $info['Config']['Labels']['net.unraid.docker.managed'] ?? false;
 			$c['Ports']       = [];
@@ -1300,6 +1306,10 @@ class DockerUtil {
 
 	public static function tailscaleStatus(string $name) {
 		return static::tailscaleCache()['containers'][$name]['data'] ?? null;
+	}
+
+	public static function netbirdStatus(string $name) {
+		return static::tailscaleCache()['netbird'][$name]['data'] ?? null;
 	}
 
 	public static function tailscaleDerpMap() {

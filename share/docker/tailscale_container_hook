@@ -14,7 +14,7 @@ exec_entrypoint() {
   echo
   echo "======================="
   echo
-  eval "exec ${ORG_ENTRYPOINT} ${ORG_CMD} ${ORG_POSTARGS}"
+  eval "exec ${ORG_ENTRYPOINT} ${ORG_POSTARGS:-${ORG_CMD}}"
 }
 
 error_handler() {

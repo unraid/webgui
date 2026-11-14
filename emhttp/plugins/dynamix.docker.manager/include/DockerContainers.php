@@ -85,12 +85,14 @@ foreach ($containers as $ct) {
   $webGui = html_entity_decode($info['url']??'');
   $TShostname = isset($ct['TSHostname']) ? $ct['TSHostname'] : '';
   $TSwebGui = html_entity_decode($info['TSurl']??'');
+  $NBhostname = $ct['NBHostname'] ?? '';
+  $NBwebGui = html_entity_decode($info['NBurl']??'');
   $support = html_entity_decode($info['Support']??'');
   $project = html_entity_decode($info['Project']??'');
   $registry = html_entity_decode($info['registry']??'');
   $donateLink = html_entity_decode($info['DonateLink']??'');
   $readme = html_entity_decode($info['ReadMe']??'');
-  $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s', '%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), addslashes($TSwebGui), $shell, $id, addslashes($support), addslashes($project),addslashes($registry),addslashes($donateLink),addslashes($readme));
+  $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s', '%s','%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), addslashes($TSwebGui), $shell, $id, addslashes($support), addslashes($project),addslashes($registry),addslashes($donateLink),addslashes($readme),addslashes($NBwebGui));
   $docker[] = "docker.push({name:'$name',id:'$id',state:$running,pause:$paused,update:$updateStatus});";
   $shape = $running ? ($paused ? 'pause' : 'play') : 'square';
   $status = $running ? ($paused ? 'paused' : 'started') : 'stopped';
@@ -189,6 +191,28 @@ foreach ($containers as $ct) {
       }
       break;
     }
+  // Check if NetBird for container is enabled by checking if NBhostname is set
+  $NB_status = '';
+  if (!empty($NBhostname)) {
+    $NBstats = $running ? DockerUtil::netbirdStatus($name) : null;
+    $NBinfo = [];
+    if (!$running) {
+      $NBinfo[] = _("Container not running");
+    } elseif (empty($NBstats)) {
+      $NBinfo[] = _("Error gathering NetBird information from container");
+      $NBinfo[] = _("Please check the logs and refresh the page");
+    } elseif (!($NBstats['management']['connected'] ?? false)) {
+      $NBinfo[] = _("Online").": ✕\n"._("Please check the logs")."!";
+    } else {
+      $NBinfo[] = _("NetBird").": v".($NBstats['daemonVersion'] ?? '');
+      $NBinfo[] = _("Online").": ✓";
+      $NBinfo[] = _("Hostname").": ".($NBstats['fqdn'] ?? $NBhostname);
+      $NBinfo[] = _("Addresses").": ".strstr($NBstats['netbirdIp'] ?? '', '/', true);
+      if (!empty($NBwebGui)) $NBinfo[] = _("URL").": ".$NBwebGui;
+    }
+    // Display plain text status so tooltip content cannot be interpreted as markup.
+    $NB_status = "<br/><div class='TS_tooltip' style='cursor:pointer; display: inline-block;' data-tstitle=\"".htmlspecialchars(implode("\n",$NBinfo), ENT_QUOTES, 'UTF-8')."\"><img src='/plugins/dynamix.docker.manager/images/netbird.png' style='height: 1.23em;'> NetBird</div>";
+  }
   // Check if Tailscale for container is enabled by checking if TShostname is set
   $TS_status = '';
   if (!empty($TShostname)) {
@@ -286,7 +310,7 @@ foreach ($containers as $ct) {
     }
   }
   echo "<div class='advanced'><i class='fa fa-info-circle fa-fw'></i> ".compress(_($version),12,0)."</div></td>";
-  echo "<td style='white-space:nowrap'><span class='docker_readmore'> ".implode('<br>',$networks).$TS_status."</span></td>";
+  echo "<td style='white-space:nowrap'><span class='docker_readmore'> ".implode('<br>',$networks).$TS_status.$NB_status."</span></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'> ".implode('<br>',$network_ips)."</span></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'>".implode('<br>',$ports_internal)."</span></td>";
   echo "<td style='white-space:nowrap'><span class='docker_readmore'>".implode('<br>',$ports_external)."</span></td>";

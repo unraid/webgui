@@ -209,14 +209,14 @@ if (isset($_POST['contName'])) {
       @unlink($oldFilename);
     }
   }
-  // Extract real Entrypoint and Cmd from container for Tailscale
-  if (isset($_POST['contTailscale']) && $_POST['contTailscale'] == 'on') {
+  // Extract real Entrypoint and Cmd from container for Tailscale or NetBird
+  if (str_contains($cmd, "--entrypoint='/opt/unraid/")) {
     // Create preliminary base container but don't run it
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
     // Get Entrypoint and Cmd from docker inspect
     $containerInfo = $DockerClient->getContainerDetails($Name);
-    $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT="' . implode(' ', $containerInfo['Config']['Entrypoint']) . '" ' : '';
-    $ts_env .= isset($containerInfo['Config']['Cmd']) ? '-e ORG_CMD="' . implode(' ', $containerInfo['Config']['Cmd']) . '" ' : '';
+    $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT=' . escapeshellarg(implode(' ', array_map('escapeshellarg', $containerInfo['Config']['Entrypoint']))) . ' ' : '';
+    $ts_env .= isset($containerInfo['Config']['Cmd']) ? '-e ORG_CMD=' . escapeshellarg(implode(' ', array_map('escapeshellarg', $containerInfo['Config']['Cmd']))) . ' ' : '';
     // Insert Entrypoint and Cmd to docker command
     $cmd = str_replace('-l net.unraid.docker.managed=dockerman', $ts_env . '-l net.unraid.docker.managed=dockerman' , $cmd);
     // Remove preliminary container
@@ -256,7 +256,6 @@ if (isset($_GET['updateContainer'])){
     $Registry = getXmlVal($xml, "Registry");
     $ExtraParams = getXmlVal($xml, "ExtraParams");
     $Network = getXmlVal($xml, "Network");
-    $TS_Enabled = getXmlVal($xml, "TailscaleEnabled");
     $oldImageID = $DockerClient->getImageID($Repository);
     // pull image
     if ($echo && !pullImage($Name, $Repository)) continue;
@@ -290,13 +289,13 @@ if (isset($_GET['updateContainer'])){
     // force kill container if still running after time-out
     if (empty($_GET['communityApplications'])) removeContainer($Name, $echo);
     // Extract real Entrypoint and Cmd from container for Tailscale
-    if ($TS_Enabled == 'true') {
+    if (str_contains($cmd, "--entrypoint='/opt/unraid/")) {
       // Create preliminary base container but don't run it
       exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker create --name '" . escapeshellarg($Name) . "' '" . escapeshellarg($Repository) . "'");
       // Get Entrypoint and Cmd from docker inspect
       $containerInfo = $DockerClient->getContainerDetails($Name);
-      $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT="' . implode(' ', $containerInfo['Config']['Entrypoint']) . '" ' : '';
-      $ts_env .= isset($containerInfo['Config']['Cmd']) ? '-e ORG_CMD="' . implode(' ', $containerInfo['Config']['Cmd']) . '" ' : '';
+      $ts_env  = isset($containerInfo['Config']['Entrypoint']) ? '-e ORG_ENTRYPOINT=' . escapeshellarg(implode(' ', array_map('escapeshellarg', $containerInfo['Config']['Entrypoint']))) . ' ' : '';
+      $ts_env .= isset($containerInfo['Config']['Cmd']) ? '-e ORG_CMD=' . escapeshellarg(implode(' ', array_map('escapeshellarg', $containerInfo['Config']['Cmd']))) . ' ' : '';
       // Insert Entrypoint and Cmd to docker command
       $cmd = str_replace('-l net.unraid.docker.managed=dockerman', $ts_env . '-l net.unraid.docker.managed=dockerman' , $cmd);
       // Remove preliminary container
@@ -1514,6 +1513,111 @@ _(Tailscale Install Troubleshooting Packages)_:
 
 </div>
 
+<div markdown="1" class="NBrow noshow"><hr></div>
+
+<?if (empty($xml['NetbirdEnabled'])):?>
+<div markdown="1" class="NBrow noshow">
+<b>_(First deployment)_</b>:
+:  <p>_(After deploying the container without a setup key, open the log and follow the link to register the container to your NetBird network!)_</p>
+
+</div>
+
+<?endif;?>
+
+<div markdown="1" class='TSNetworkAllowed'>
+_(Use NetBird)_:
+: <span class="flex flex-row items-center">
+    <input type="checkbox" class="switch-on-off" name="contNetbird" id="contNetbird" <?php if (($xml['NetbirdEnabled'] ?? '') == 'true') echo 'checked'; ?> onchange="showNetbird()">
+  </span>
+
+:docker_netbird_help:
+
+</div>
+
+<div markdown="1" class='TSNetworkNotAllowed'>
+_(Use NetBird)_:
+: _(Option disabled as Network type is not bridge or custom)_
+
+:docker_netbird_help:
+
+</div>
+<div markdown="1" class="NBrow noshow">
+<b>_(NOTE)_</b>:
+:  <i>_(This option will install NetBird and dependencies into the container.)_</i>
+</div>
+
+<div markdown="1" class="NBrow noshow">
+_(NetBird Hostname)_:
+: <input type="text" pattern="[A-Za-z0-9_\-]*" name="NBhostname" value="<?=htmlspecialchars($xml['NetbirdHostname'] ?? '')?>" placeholder="_(Defaults to the container name)_">
+
+:docker_netbird_hostname_help:
+
+</div>
+
+<div markdown="1" class="NBrow noshow">
+_(NetBird Management URL)_:
+: <input type="text" name="NBmanagementurl" value="<?=htmlspecialchars($xml['NetbirdManagementURL'] ?? '')?>" placeholder="_(Leave empty to use NetBird Cloud)_">
+
+:docker_netbird_management_url_help:
+
+</div>
+
+<div markdown="1" class="NBrow noshow">
+_(NetBird Setup Key)_:
+: <input type="password" autocomplete="new-password" name="NBsetupkey" value="<?=htmlspecialchars($xml['NetbirdSetupKey'] ?? '')?>" placeholder="_(Leave empty to log in with the link in the container log)_">
+
+:docker_netbird_setup_key_help:
+
+</div>
+
+<div markdown="1" class="NBrow noshow">
+_(NetBird Userspace Networking)_:
+: <select name="NBuserspacenetworking">
+    <?=mk_option(($xml['NetbirdUserspaceNetworking'] ?? '') ?: 'true','true',_('Enabled'))?>
+    <?=mk_option(($xml['NetbirdUserspaceNetworking'] ?? '') ?: 'true','false',_('Disabled'))?>
+  </select>
+
+:docker_netbird_userspace_networking_help:
+
+</div>
+
+<div markdown="1" class="NBrow noshow">
+_(Enable NetBird SSH)_:
+: <select name="NBssh">
+    <?=mk_option($xml['NetbirdSSH'] ?? '','false',_('No'))?>
+    <?=mk_option($xml['NetbirdSSH'] ?? '','true',_('Yes'))?>
+  </select>
+
+:docker_netbird_ssh_help:
+
+</div>
+
+<div markdown="1" class="NBrow noshow">
+_(NetBird Show Advanced Settings)_:
+: <span class="flex flex-row items-center">
+    <input type="checkbox" name="NBadvanced" id="NBadvanced" class="switch-on-off" onchange="showNetbird()">
+  </span>
+
+:docker_netbird_show_advanced_help:
+
+</div>
+
+<div markdown="1" class="NBadvancedrow noshow">
+_(NetBird Extra Parameters)_:
+: <input type="text" name="NBextraparams" value="<?=htmlspecialchars($xml['NetbirdParams'] ?? '')?>" placeholder="_(Leave empty if unsure)_">
+
+:docker_netbird_extra_param_help:
+
+</div>
+
+<div markdown="1" class="NBadvancedrow noshow">
+_(NetBird State Directory)_:
+: <input type="text" name="NBstatedir" value="<?=htmlspecialchars($xml['NetbirdStateDir'] ?? '')?>" placeholder="_(Leave empty if unsure)_">
+
+:docker_netbird_statedir_help:
+
+</div>
+
 <div markdown="1" class="TSdivider noshow">
   <hr>
 </div>
@@ -1696,6 +1800,7 @@ function showSubnet(bridge) {
   // make sure to re-trigger Tailscale check when network is changed
   if (bridge.match(/^(host|container)$/i) !== null) {
     $('#contTailscale').siblings('.switch-button-background').click();
+    if ($('#contNetbird').prop('checked')) $('#contNetbird').siblings('.switch-button-background').click();
     $(".TSNetworkAllowed").hide();
     $(".TSNetworkNotAllowed").show();
   } else {
@@ -1853,6 +1958,15 @@ function showTSAdvanced(checked) {
   }
 }
 
+function showNetbird() {
+  if ($('select[name="contNetwork"]').val().match(/^(host|container)$/i) !== null) $('#contNetbird').prop('checked',false);
+  var checked = $('#contNetbird').prop('checked');
+  // Tailscale and NetBird are mutually exclusive
+  if (checked && $('#contTailscale').prop('checked')) $('#contTailscale').siblings('.switch-button-background').click();
+  $('.NBrow').toggle(checked);
+  $('.NBadvancedrow').toggle(checked && $('#NBadvanced').prop('checked'));
+}
+
 function showTailscale(source) {
   var bridge = $('select[name="contNetwork"]').val();
   if (bridge.match(/^(host|container)$/i) !== null) {
@@ -1867,6 +1981,7 @@ function showTailscale(source) {
     $('#TSserve').val('no');
   }
   checked = $('#contTailscale').prop('checked');
+  if (checked && $('#contNetbird').prop('checked')) $('#contNetbird').siblings('.switch-button-background').click();
   if (!checked) {
     $('.TSdivider').hide();
     $('.TSwarning').hide();
