@@ -15,6 +15,7 @@
 // usage: rebuild_dependents <container> ...
 // Rebuild the containers that use the network of <container> after it was recreated.
 // Waits up to 5 minutes for <container> to start, e.g. Auto Update starts it after the update.
+// After that it gives up (no process is left waiting); opening the Docker tab rebuilds the dependents of a container started later.
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
 
