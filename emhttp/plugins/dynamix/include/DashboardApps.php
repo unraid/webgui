@@ -102,13 +102,8 @@ if ($_POST['vms']) {
   $vmusagehtml = [];
   $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
   $vms = $lv->get_domains() ?: [];
-  if (file_exists($user_prefs)) {
-    $prefs = parse_ini_file($user_prefs); $sort = [];
-    foreach ($vms as $vm) $sort[] = array_search($vm,$prefs) ?? 999;
-    array_multisort($sort,SORT_NUMERIC,$vms);
-  } else {
-    natcasesort($vms);
-  }
+  natcasesort($vms);
+  if (file_exists($user_prefs)) $vms = sort_by_order($vms, array_values((array)@parse_ini_file($user_prefs)));
   echo "<tr title='' class='updated'><td>";
   $running = 0;
   $pci_device_changes = comparePCIData();

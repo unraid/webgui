@@ -13,6 +13,7 @@
 ?>
 <?
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
 require_once "$docroot/plugins/dynamix.vm.manager/include/libvirt_helpers.php";
 
 $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
@@ -20,13 +21,10 @@ $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
 $act = $_POST['action'];
 $vms = $lv->get_domains();
 
-if (file_exists($user_prefs)) {
-  $prefs = parse_ini_file($user_prefs); $sort = [];
-  foreach ($vms as $vm) $sort[] = array_search($vm,$prefs) ?? 999;
-  array_multisort($sort, ($act=='start'?SORT_ASC:SORT_DESC), SORT_NUMERIC, $vms);
-} else {
-  array_multisort($vms, ($act=='start'?SORT_ASC:SORT_DESC), SORT_NATURAL|SORT_FLAG_CASE);
-}
+// start in the order of the VMs tab, stop in the reverse order
+natcasesort($vms);
+if (file_exists($user_prefs)) $vms = sort_by_order($vms, array_values((array)@parse_ini_file($user_prefs)));
+if ($act!='start') $vms = array_reverse($vms);
 
 foreach ($vms as $vm) {
   $res = $lv->get_domain_by_name($vm);
