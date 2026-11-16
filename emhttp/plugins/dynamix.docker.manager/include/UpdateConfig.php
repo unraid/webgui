@@ -33,13 +33,7 @@ case 'autostart':
     unset($autostart[$key]);
   }
   if ($autostart) {
-    if (file_exists($user_prefs)) {
-      $prefs = parse_ini_file($user_prefs); $sort = [];
-      foreach ($autostart as $ct) $sort[] = array_search(var_split($ct),$prefs) ?? 999;
-      array_multisort($sort,$autostart);
-    } else {
-      natcasesort($autostart);
-    }
+    $autostart = DockerUtil::sortAutostart($autostart);
     file_put_contents($autostart_file, implode("\n", $autostart)."\n");
   } else @unlink($autostart_file);
   break;

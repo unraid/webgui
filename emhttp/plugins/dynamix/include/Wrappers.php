@@ -39,6 +39,16 @@ function file_put_contents_atomic($filename,$data) {
   return strlen($data);
 }
 
+// Sort items by the position of their name in $order (a list of names, e.g. the values of userprefs.cfg).
+// Items whose name is not in $order go last and keep the relative order they came in.
+// $name: optional callback returning the name of an item (default: the item itself is the name).
+function sort_by_order(array $items, array $order, ?callable $name=null) {
+  $pos = array_flip(array_reverse(array_values($order), true)); // first occurrence of a name wins
+  $rank = function($item) use ($pos, $name) {return $pos[$name ? $name($item) : $item] ?? PHP_INT_MAX;};
+  usort($items, function($a, $b) use ($rank) {return $rank($a) <=> $rank($b);}); // usort is stable (PHP 8+)
+  return $items;
+}
+
 // custom parse_ini_file/string functions to deal with '#' comment lines and remove html/php tags
 function my_parse_ini_string($text, $sections=false, $scanner=INI_SCANNER_NORMAL) {
   return parse_ini_string(strip_tags(html_entity_decode(preg_replace('/^#.*$/m','',$text))),$sections,$scanner);

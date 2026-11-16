@@ -22,11 +22,9 @@ $containers = DockerUtil::docker("ps -a --filter status='$status' --format='{{.N
 $dockerClient = new DockerClient();
 $info = $dockerClient->getDockerContainers();
 
-if (file_exists($user_prefs)) {
-  $prefs = parse_ini_file($user_prefs); $sort = [];
-  foreach ($containers as $ct) $sort[] = array_search($ct,$prefs) ?? 999;
-  array_multisort($sort, ($action=='start'?SORT_ASC:SORT_DESC), SORT_NUMERIC, $containers);
-}
+// start in the order of the Docker tab, stop and pause in the reverse order
+$containers = array_values(array_intersect(DockerUtil::containerOrder(array_column($info,'Name'), array_column($info,'CreatedAt','Name')), $containers));
+if ($action!='start') $containers = array_reverse($containers);
 foreach ($containers as $ct) {
   if ( $action == "start") {
     $key = array_search($ct,array_column($info,"Name"));

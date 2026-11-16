@@ -63,13 +63,8 @@ if ($_POST['docker']) {
   $user_prefs = $dockerManPaths['user-prefs'];
   $DockerClient = new DockerClient();
   $DockerTemplates = new DockerTemplates();
-  $containers = $DockerClient->getDockerContainers() ?: [];
+  $containers = DockerUtil::sortContainers($DockerClient->getDockerContainers() ?: []);
   $allInfo = $DockerTemplates->getAllInfo();
-  if (file_exists($user_prefs)) {
-    $prefs = parse_ini_file($user_prefs); $sort = [];
-    foreach ($containers as $ct) $sort[] = array_search($ct['Name'],$prefs) ?? 999;
-    array_multisort($sort,SORT_NUMERIC,$containers);
-  }
   echo "<tr title='' class='updated'><td>";
   foreach ($containers as $ct) {
     $name = $ct['Name'];

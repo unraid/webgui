@@ -103,12 +103,7 @@ case 'ct':
   $user_prefs = $dockerManPaths['user-prefs'];
   $cts = []; foreach ($containers as $ct) $cts[] = $ct['Name'];
   // list containers per user preference
-  if (file_exists($user_prefs)) {
-    $prefs = parse_ini_file($user_prefs); $sort = [];
-    foreach ($containers as $ct) $sort[] = array_search($ct['Name'],$prefs) ?? 999;
-    array_multisort($sort,SORT_NUMERIC,$containers);
-    unset($sort);
-  }
+  $containers = DockerUtil::sortContainers($containers);
   foreach ($containers as $ct) {
     if ( ! is_file($allInfo[$ct['Name']]['template']) ) continue;
     echo "<tr><td>{$ct['Name']}</td>";
