@@ -554,7 +554,7 @@ build_locations(){
 	#
 	# proxy logterminal to ttyd server listening on unix:/var/tmp/<tag>.sock
 	#
-	location ~ ^/logterminal/([A-Za-z0-9][A-Za-z0-9_.-]{0,127})/(.*)$ {
+	location ~ "^/logterminal/([A-Za-z0-9][A-Za-z0-9_.-]{0,127})/(.*)$" {
 	    auth_request /auth-request.php;
 	    proxy_read_timeout 864000; # 10 days(!)
 	    proxy_pass http://unix:/var/tmp/$1.sock:/$2;
