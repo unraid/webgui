@@ -2371,9 +2371,10 @@ function actuallyApplyBootParams(btn) {
         selectedDefaultEntry = $(this).attr('data-label');
     });
 
-    // Get timeout value from dropdown (if exists)
+    // Get timeout value from dropdown (if exists); empty lets the script
+    // apply the bootloader's default timeout
     const timeoutDropdown = document.getElementById('timeout-dropdown');
-    let timeoutValue = timeoutDropdown ? timeoutDropdown.value : '50';
+    let timeoutValue = timeoutDropdown ? timeoutDropdown.value : '';
     if (timeoutDropdown && bootloaderType === 'syslinux') {
         const timeoutSeconds = parseInt(timeoutValue, 10);
         if (Number.isFinite(timeoutSeconds)) {
