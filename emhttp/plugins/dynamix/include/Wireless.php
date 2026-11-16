@@ -88,7 +88,13 @@ case 'list':
   $title = _('Connect to WiFi network');
   $port  = array_key_first($wifi);
   $carrier = "/sys/class/net/$port/carrier";
-  $echo  = $wlan = [];
+  $echo  = [
+    'active' => ['heading' => _('Connected'), 'empty' => _('None'), 'items' => []],
+    'saved'  => ['heading' => _('My networks'), 'empty' => _('None'), 'items' => []],
+    'other'  => ['heading' => _('Other networks'), 'empty' => _('None'), 'items' => [], 'visible' => !$load],
+    'port'   => $port
+  ];
+  $wlan = [];
   foreach ($wifi as $network => $block) {
     if ($network == $port) continue;
     $wlan[$network][0] = $block['ATTR1'] ?? '';
@@ -107,6 +113,7 @@ case 'list':
     $alive = $up ? exec("iw ".escapeshellarg($port)." link 2>/dev/null | grep -Pom1 'SSID: \K.+'") : '';
     $state = $up ? _('Connected') : _('Disconnected');
     $color = $up ? 'blue' : 'red';
+    $echo['active']['heading'] = $state;
 
     foreach ($wlan as $network => $block) {
       $attr[$network]['ATTR1'] = $block[0] ?? '';
@@ -115,23 +122,31 @@ case 'list':
       $attr[$network]['ATTR4'] = $block[1] ?? '';
       if (isset($wifi[$network]['GROUP'])) {
         if ($network == $alive || $wifi[$network]['GROUP'] == 'active') {
-          $echo['active'][] = "<dl><dt>$state:</dt>";
-          $echo['active'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$network</span><i class=\"fa fa-fw fa-wifi hand $color-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),1)\" title=\"$title\"></i><input type=\"button\" class=\"form\" value=\""._('Info')."\" onclick=\"networkInfo('$port')\"></span></dd>";
+          $echo['active']['items'][] = [
+            'network' => $network,
+            'task' => 1,
+            'color' => $color,
+            'title' => $title,
+            'info' => true,
+            'infoLabel' => _('Info')
+          ];
         } else {
-          $echo['saved'][] = empty($echo['saved']) ? "<dl><dt>"._('My networks').":</dt>" : "<dt>&nbsp;</dt>";
-          $echo['saved'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$network</span><i class=\"fa fa-wifi hand blue-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),1)\" title=\"$title\"></i></span></dd>";
+          $echo['saved']['items'][] = [
+            'network' => $network,
+            'task' => 1,
+            'color' => 'blue',
+            'title' => $title
+          ];
         }
       } else {
-        $echo['other'][] = empty($echo['other']) ? "<dl><dt>"._('Other networks').":</dt>" : "<dt>&nbsp;</dt>";
-        $echo['other'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$network</span><i class=\"fa fa-wifi hand grey-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),0)\" title=\"$title\"></i></span></dd>";
+        $echo['other']['items'][] = [
+          'network' => $network,
+          'task' => 0,
+          'color' => 'grey',
+          'title' => $title
+        ];
       }
     }
-    if (empty($echo['active'])) $echo['active'][] = "<dl><dt>"._('Connected').":</dt><dd>"._('None')."</dd>";
-    if (empty($echo['saved'])) $echo['saved'][] = "<dl><dt>"._('My networks').":</dt><dd>"._('None')."</dd>";
-    if (empty($echo['other'])) $echo['other'][] = $load ? "" : "<dl><dt>"._('Other networks').":</dt><dd>"._('None')."</dd>";
-    $echo['active'] = implode($echo['active']);
-    $echo['saved'] = implode($echo['saved']);
-    $echo['other'] = implode($echo['other']);
     saveAttr();
   }
   echo json_encode($echo);

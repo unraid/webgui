@@ -102,6 +102,7 @@ function mover_running_pid() {
 
 while (true) {
 	$var = (array)@parse_ini_file("$varroot/var.ini");
+	$mover_progress_enabled = _var($var, 'shareMoverProgress', 'no') === 'yes';
 
 	/* Check for language changes */
 	extract(parse_plugin_cfg('dynamix', true));
@@ -182,7 +183,7 @@ while (true) {
 		$process = 0;
 	}
 
-  if ($process == 2) {
+  if ($process == 2 && $mover_progress_enabled) {
     $moverdata = [];
     if (file_exists("$varroot/mover.ini") && $mover_pid) {
       $moverstat = @parse_ini_file("$varroot/mover.ini") ?: [];

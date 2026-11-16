@@ -309,13 +309,16 @@ function fileEdit(id) {
     return;
   }
   dfm.window = $("#dfm_dialogWindow");
+  window.dfm_file_source = source;
   if (!known.includes(ext)) {
     // file viewer - supported file extensions: .pdf, .jpg, .png, .jpeg, .gif
-    dfm.window.html($("#dfm_templateViewFile").html().replace('{$0}',source).dfm_build());
+    dfm.window.html($("#dfm_templateViewFile").html().dfm_build());
+    delete window.dfm_file_source;
     return;
   }
   // file editor dialog
-  dfm.window.html($("#dfm_templateEditFile").html().replace('{$0}',source).dfm_build());
+  dfm.window.html($("#dfm_templateEditFile").html().dfm_build());
+  delete window.dfm_file_source;
   dfm.window.dialog({
     classes: {'ui-dialog': 'ui-dfm ui-corner-all'},
     autoOpen: true,
@@ -386,11 +389,11 @@ function doJobs(title) {
         dfm.window.find('i[id^="queue_"]').each(function(){if ($(this).hasClass('fa-check-square-o')) row.push($(this).prop('id').split('_')[1]);});
         $.post('/webGui/include/Control.php',{mode:'undo',row:row.join(',')},function(queue){
           $.post('/webGui/include/Control.php',{mode:'jobs'},function(jobs){
-            $('#dfm_jobs').html(jobs);
+            renderJobs(jobs);
             if (dfm.window.find('i[id^="queue_"]').length==0) $.removeCookie('dfm_control.jobs');
           });
           if (parseInt(queue) == 1) {
-            setTimeout(function(){$('#dfm_jobs').html("<div id='dfm_joblist'><i class='fa fa-fw fa-minus-square-o grey-text job'></i>_(No jobs scheduled)_ ...</div>");},100);
+            setTimeout(function(){renderJobs([]);},100);
             $('.ui-dfm .ui-dialog-buttonset button:eq(0)').prop('disabled',true);
             $('.dfm_control.jobs').prop('disabled',true);
             $.removeCookie('dfm_control.jobs');
@@ -407,6 +410,43 @@ function doJobs(title) {
   $('.ui-dfm .ui-dialog-titlebar-close').css({'display':'none'});
   if (dfm.running) $('.ui-dfm .ui-dialog-buttonset button:eq(0)').prop('disabled',true);
   $('.ui-dfm .ui-dialog-buttonset button:eq(1)').prop('disabled',true);
+}
+
+function renderJobs(data) {
+  var jobs = data;
+  if (typeof jobs == 'string') {
+    try {
+      jobs = JSON.parse(jobs);
+    } catch (e) {
+      jobs = [];
+    }
+  }
+  if (!Array.isArray(jobs)) jobs = [];
+  var target = document.getElementById('dfm_jobs');
+  if (!target) return;
+  var list = document.createElement('div');
+  list.id = 'dfm_joblist';
+  if (jobs.length == 0) {
+    var empty = document.createElement('span');
+    empty.className = 'fa fa-fw fa-minus-square-o grey-text job';
+    list.appendChild(empty);
+    list.appendChild(document.createTextNode('_(No jobs scheduled)_ ...'));
+  } else {
+    jobs.forEach(function(job,index) {
+      if (index > 0) list.appendChild(document.createElement('br'));
+      var selector = document.createElement('i');
+      selector.id = 'queue_'+job.id;
+      selector.className = 'fa fa-fw fa-square-o blue-text job';
+      selector.addEventListener('click',function() { selectOne(selector.id,false); });
+      list.appendChild(selector);
+      var number = String(job.id).padStart(4,'0');
+      var text = (job.label || 'Job')+' ['+number+'] - '+(job.task || '')+' '+(job.source || '');
+      if (job.more) text += ' ('+job.more+')';
+      if (job.target) text += ' --> '+job.target;
+      list.appendChild(document.createTextNode(text));
+    });
+  }
+  target.replaceChildren(list);
 }
 
 var filemonitor = new NchanSubscriber('/sub/filemonitor',{subscriber:'websocket'});
