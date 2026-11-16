@@ -212,6 +212,6 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   // remove old orphan image since it's no longer used by this container
   if ($oldImageID && $oldImageID != $newImageID) removeImage_nchan($oldImageID);
 }
-write('_DONE_','');
+write($failed ? '_ERROR_' : '_DONE_','');
 exit($failed ? 1 : 0);
 ?>

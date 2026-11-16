@@ -926,11 +926,12 @@ class DockerClient {
 		// The daemon streams {"error":...} only once the pull has started. Failures before that (registry
 		// unreachable, DNS, TLS, auth) come back as an HTTP error with a {"message":...} body, which the
 		// callers of this function do not look at. Turn such a reply into an "error" line for them.
+		// An empty message does not count as reported: the callers treat an empty error as success.
 		$reported = false;
 		$wrapped = $callback ? function ($line) use ($callback, &$code, &$reported) {
 			$cnt = json_decode($line, true);
-			if (is_array($cnt) && isset($cnt['error'])) $reported = true;
-			elseif ($code !== true && is_array($cnt) && isset($cnt['message'])) {
+			if (is_array($cnt) && isset($cnt['error']) && $cnt['error'] !== '') $reported = true;
+			elseif ($code !== true && is_array($cnt) && isset($cnt['message']) && $cnt['message'] !== '') {
 				$line = json_encode(['error' => $cnt['message']])."\n";
 				$reported = true;
 			}
