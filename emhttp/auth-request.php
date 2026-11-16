@@ -95,7 +95,8 @@ $arrWhitelist = [
   '/favicon.svg',
   '/web-app-manifest-192x192.png',
   '/web-app-manifest-512x512.png',
-  '/manifest.json'
+  '/manifest.json',
+  '/manifest.php'
 ];
 
 // Use canonical filesystem path checks against the trusted docroot.
