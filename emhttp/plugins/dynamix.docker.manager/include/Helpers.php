@@ -807,7 +807,7 @@ function rebuildNetworkDependents($names, $wait=false, $show=null, $rebuild=null
   $queue = array_values(array_filter((array)$names));
   // with $wait, rebuild_dependents already waited for these; a stopped network container met later in the chain gets its own wait
   $waited = $wait ? array_flip($queue) : [];
-  $parents = $handled = $log = [];
+  $parents = $handled = $failed = $log = [];
   networkDependentsLock();
   while (($parent = array_shift($queue)) !== null) {
     if (isset($parents[$parent])) continue;
@@ -816,9 +816,13 @@ function rebuildNetworkDependents($names, $wait=false, $show=null, $rebuild=null
     if (!$orphans) continue;
     $state = DockerUtil::docker("inspect --format='{{.State.Running}}' ".escapeshellarg($parent));
     if ($state == 'false' && !isset($waited[$parent])) {
+      // networkOrphans() also lists the containers without a template for every target; waiting cannot rebuild those
+      if (!array_filter($orphans)) continue;
       // created but not started yet, e.g. Auto Update starts it after the update: wait for it in the background
       exec("nohup $script/rebuild_dependents ".escapeshellarg($parent)." >/dev/null 2>&1 &");
-      if ($show) $show(sprintf(_('Containers that use the network of %s are rebuilt once it starts within 5 minutes: it was created but not started (for example it was stopped before the update), and they need it running. If it starts later, open the Docker tab to rebuild them'),$parent));
+      if ($show) $show(isset($failed[$parent])
+        ? sprintf(_('Containers that use the network of %s are rebuilt once it starts within 5 minutes: it was rebuilt but did not start, and they need it running. If it starts later, open the Docker tab to rebuild them'),$parent)
+        : sprintf(_('Containers that use the network of %s are rebuilt once it starts within 5 minutes: it was created but not started (for example it was stopped before the update), and they need it running. If it starts later, open the Docker tab to rebuild them'),$parent));
       continue;
     }
     if ($show) $show(sprintf(_('Rebuilding containers that use the network of %s: it was recreated, which left them with only loopback (for example apps routed through a VPN container lose their connection)'),$parent));
@@ -843,6 +847,7 @@ function rebuildNetworkDependents($names, $wait=false, $show=null, $rebuild=null
           $msg = "$name did not start after it was rebuilt for its recreated network container $parent (for example its command or a file it needs is missing); see the log of $name, then start it";
           // containers that use the network of $name are rebuilt once it starts, like for a stopped network container above
           $queue[] = $name;
+          $failed[$name] = true;
         } elseif ($rebuilt) {
           $msg = "rebuilt $name: its network container $parent was recreated, which had left $name with only loopback";
           $queue[] = $name;
