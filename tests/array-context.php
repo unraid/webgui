@@ -117,5 +117,11 @@ if (!str_contains($page, "\$keyfile = \$array_ctx['id'] == 1 && file_exists(")) 
 if (!str_contains($page, "if (\$array_ctx['id'] == 1) echo mk_option(1,'file',_('Keyfile'));")) {
   throw new RuntimeException('ArrayOperation.page must offer keyfile upload for the default array only.');
 }
+if (substr_count($page, "<?if (\$array_ctx['id'] == 1):?>\n      var data = {};\n      data['#file'] = 'unused';\n      data['#include'] = 'webGui/include/KeyUpload.php';") !== 1) {
+  throw new RuntimeException('ArrayOperation.page must send a keyfile to KeyUpload.php for the default array only.');
+}
+if (!str_contains($page, "<?if (\$array_ctx['id'] == 1):?>\n            text:\"_(Use **ASCII** characters from space ' ' to tilde '~')_<br>_(Otherwise use the **keyfile** method")) {
+  throw new RuntimeException('ArrayOperation.page must give the keyfile advice for the default array only.');
+}
 
 echo "Array context regression test passed.\n";
