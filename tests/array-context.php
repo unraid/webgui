@@ -101,4 +101,21 @@ if (!preg_match('#<\?if \(\$array_ctx\[\'id\'\] == 1\):\?>\n<form name="shutdown
   throw new RuntimeException('ArrayOperation.page must show the shutdownOps form only for the default array.');
 }
 
+// The pool-state check before Start reads the selected array's disks.ini, and array 1 sends no array id.
+if (!str_contains($page, "pools:'<?=implode(',',\$pools)?>'<?if (\$array_ctx['id'] > 1):?>,array:<?=\$array_ctx['id']?><?endif;?>}")) {
+  throw new RuntimeException('ArrayOperation.page must send the array id with the pool-state check for an additional array only.');
+}
+$report = file_get_contents("$repo/emhttp/plugins/dynamix/include/Report.php");
+if ($report === false || !str_contains($report, "\$ctx['id'] > 1 ? \"{\$ctx['state']}/disks.ini\" : 'state/disks.ini'")) {
+  throw new RuntimeException('Report.php must read the pool states of the array it is asked about.');
+}
+
+// The keyfile controls write and delete the host keyfile: an additional array must not offer them.
+if (!str_contains($page, "\$keyfile = \$array_ctx['id'] == 1 && file_exists(")) {
+  throw new RuntimeException('ArrayOperation.page must offer keyfile delete for the default array only.');
+}
+if (!str_contains($page, "if (\$array_ctx['id'] == 1) echo mk_option(1,'file',_('Keyfile'));")) {
+  throw new RuntimeException('ArrayOperation.page must offer keyfile upload for the default array only.');
+}
+
 echo "Array context regression test passed.\n";
