@@ -46,6 +46,8 @@ foreach ($ports as $port) {
     $hwclock[$port] = exec("ethtool -T $port|grep -Pom1 '^PTP Hardware Clock: \K.+'") == 'none' ? 'disabled' : '';
 }
 ?>
+<link type="text/css" rel="stylesheet" href="<?php autov('/webGui/styles/jquery.searchable-select.css') ?>">
+<script src="<?php autov('/webGui/javascript/jquery.searchable-select.js') ?>"></script>
 <form markdown="1" name="datetime_settings" method="POST" action="/update.htm" target="progressFrame" onchange="signal(this)">
 <input type="hidden" name="setDateTime" value="apply">
 
@@ -71,7 +73,7 @@ _(Time format)_:
   </select>
 
 _(Time zone)_:
-: <select name="timeZone"><?php
+: <select name="timeZone" aria-label="_(Time zone)_"><?php
   foreach ($tmzones as $zone) {
       [$timezone, $city] = my_explode('|', $zone);
       echo mk_option($var['timeZone'], $timezone, $city);
@@ -323,6 +325,7 @@ $(function() {
   oldDate = form.display_date.selectedIndex;
   oldTime = form.display_time.selectedIndex;
   oldZone = form.timeZone.selectedIndex;
+  if ($.fn.searchableSelect) $(form.timeZone).searchableSelect({buttonLabel:"_(Show time zones)_"});
   form.USE_NTP.selectedIndex = <?=_var($PTP,'SYNC') == 'yes' ? 1 : ($var['USE_NTP'] == 'yes' ? 0 : 2)?>;
 <?if (empty($ports)):?>
   if (form.USE_NTP.selectedIndex==1) $('#noports').show();
