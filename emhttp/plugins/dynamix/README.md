@@ -36,8 +36,12 @@ create a second control. Accessible names come from the native select's
 override the name. `buttonLabel` defaults to `Show options`.
 
 The original select remains the only submitted value. Choosing a different
-option emits its normal `change` event once. Typing or dismissing a search does
-not change the selection or mark the settings form as changed. Disabled options,
+option dispatches one bubbling native `change` event. Native DOM listeners,
+jQuery listeners, and inline handlers receive the same event. Choosing the
+current value emits no change. Clicking the closed input reopens all options,
+including when the input still has focus after selection or Escape. Clicking
+an already open input preserves the current filter. Typing or dismissing a
+search does not change the selection or mark the settings form as changed. Disabled options,
 including options in a disabled group, are excluded from results. Native
 required-field errors are presented on the visible input. Form reset restores
 the selected label without emitting a change.

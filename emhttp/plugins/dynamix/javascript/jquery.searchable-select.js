@@ -41,7 +41,7 @@
           self.input.val(ui.item.label);
           if (!ui.item.option.selected) {
             ui.item.option.selected = true;
-            select.trigger('change');
+            select[0].dispatchEvent(new Event('change',{bubbles:true}));
           }
           return false;
         },
@@ -64,6 +64,9 @@
         focus:function(event) {
           event.target.select();
           this.input.autocomplete('search','');
+        },
+        click:function() {
+          if (!this.menu.is(':visible')) this.input.autocomplete('search','');
         },
         change:function(event) {
           // Query text must not mark the containing settings form as changed.
