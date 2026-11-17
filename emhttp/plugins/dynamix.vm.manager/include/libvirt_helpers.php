@@ -175,8 +175,10 @@ class Array2XML {
 	// Load emhttp variables if needed.
 	if (!isset($var)){
 		$var = @parse_ini_file("$docroot/state/var.ini");
-		$disks = @parse_ini_file("$docroot/state/disks.ini", true);
 		extract(parse_plugin_cfg("dynamix",true));
+	}
+	if (!isset($disks)) {
+		$disks = @parse_ini_file("$docroot/state/disks.ini", true);
 	}
 	$ethX = 'eth0';
 	if (!isset($$ethX) && is_file("$docroot/state/network.ini")) {
