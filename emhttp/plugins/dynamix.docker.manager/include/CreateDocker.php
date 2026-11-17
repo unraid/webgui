@@ -383,8 +383,6 @@ if (isset($_GET['xmlTemplate'])) {
         }
       }
     }
-    $xml['Overview'] = str_replace(['[', ']'], ['<', '>'], $xml['Overview']);
-    $xml['Description'] = $xml['Overview'] = strip_tags(str_replace("<br>","\n", $xml['Overview']));
     echo "<script>var Settings=".json_encode($xml, JSON_HEX_TAG | JSON_INVALID_UTF8_SUBSTITUTE).";</script>";
   }
 }
@@ -1464,7 +1462,7 @@ _(Tailscale WebUI)_:
 
 <div markdown="1" class="TSroutes noshow">
 _(Tailscale Advertise Routes)_:
-: <input type="text" pattern="[0-9:., \/]*" name="TSroutes" <?php if (!empty($xml['TailscaleRoutes'])) echo 'value="' . htmlspecialchars($xml['TailscaleRoutes']) . '"'?> placeholder="_(Leave empty if unsure)_">
+: <input type="text" pattern="[0-9A-Fa-f:., \/]*" name="TSroutes" <?php if (!empty($xml['TailscaleRoutes'])) echo 'value="' . htmlspecialchars($xml['TailscaleRoutes']) . '"'?> placeholder="_(Leave empty if unsure)_">
 
 :docker_tailscale_advertise_routes_help:
 
@@ -1954,23 +1952,37 @@ function toggleAllocations() {
   }
 }
 
-function load_contOverview() {
-  var new_overview = $("textarea[name='contOverview']").val();
-  new_overview = new_overview.replaceAll("[","<").replaceAll("]",">");
-  // Handle code block being created by authors indenting (manually editing the xml and spacing)
-  new_overview = new_overview.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
-  new_overview = marked(new_overview,{sanitize:true});
-  new_overview = new_overview.replaceAll("\n","<br>"); // has to be after marked
-  $("#contDescription").html(new_overview);
+function sanitizeDockerPreviewTag(tag) {
+  if (/^<\/?(?:a|b|strong|i|em|u|code)>$/i.test(tag) || /^<br\s*\/?>$/i.test(tag)) {
+    return tag.toLowerCase();
+  }
+  var link = /^<a\s+href=(["'])([^<>]*?)\1(?:\s+target=(["'])_blank\3)?\s*>$/i.exec(tag);
+  if (link) {
+    var url;
+    try {
+      url = new URL(link[2]);
+    } catch {
+      return escapeDockerField(tag);
+    }
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return '<a href="'+escapeDockerField(url.href)+'"'+(link[3] ? ' target="_blank" rel="noopener noreferrer"' : '')+'>';
+    }
+  }
+  return escapeDockerField(tag);
+}
 
-  var new_requires = $("textarea[name='contRequires']").val();
-  new_requires = new_requires.replaceAll("[","<").replaceAll("]",">");
-  // Handle code block being created by authors indenting (manually editing the xml and spacing)
-  new_requires = new_requires.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
-  new_requires = marked(new_requires,{sanitize:true});
-  new_requires = new_requires.replaceAll("\n","<br>"); // has to be after marked
-  new_requires = new_requires ? new_requires : "<em>_(None Listed)_</em>";
-  $("#contRequires").html(new_requires);
+function renderDockerPreview(text) {
+  text = text.replace(/\[(a\s+href=[^\]\r\n]+)\]/gi,"<$1>")
+             .replace(/\[(\/?(?:a|b|strong|i|em|u|code)|br\s*\/?)\](?!\()/gi,"<$1>");
+  // Handle code block indentation in authored templates.
+  text = text.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
+  return marked(text,{sanitize:true,sanitizer:sanitizeDockerPreviewTag}).replaceAll("\n","<br>");
+}
+
+function load_contOverview() {
+  $("#contDescription").html(renderDockerPreview($("textarea[name='contOverview']").val()));
+  var requires = renderDockerPreview($("textarea[name='contRequires']").val());
+  $("#contRequires").html(requires || "<em>_(None Listed)_</em>");
 }
 
 $(function() {
@@ -1998,7 +2010,7 @@ $(function() {
       return categories.includes(this.value);
     }).prop('selected',true);
     // Remove empty description
-    if (!Settings.Description.length) {
+    if (!Settings.Overview.length) {
       $('#canvas').find('#Overview:first').hide();
     }
     // Load config info
