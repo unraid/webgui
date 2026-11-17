@@ -3003,7 +3003,10 @@ function vm_manager_storage_path($storage="default") {
 		if ($storage === '' || $storage === '.' || $storage === '..' || strpbrk($storage, "/\\\0") !== false) return false;
 
 		$storagePools = function_exists('pools_filter') ? pools_filter((array)($disks ?? [])) : [];
-		if (!in_array($storage, $storagePools, true)) return false;
+		$isArrayDisk = str_starts_with($storage, 'disk')
+			&& ($disks[$storage]['type'] ?? '') === 'Data'
+			&& !empty($disks[$storage]['device']);
+		if (!$isArrayDisk && !in_array($storage, $storagePools, true)) return false;
 		$path = "/mnt/$storage/";
 	}
 
