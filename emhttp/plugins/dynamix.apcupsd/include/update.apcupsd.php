@@ -20,6 +20,7 @@ function apcupsd_set($key, $value, $conf) {
   // Keep the replacement a single sed command even when a submitted value
   // contains line breaks, then quote the complete expression for the shell.
   $value = preg_replace('/[\r\n]/', ' ', (string)$value);
+  $value = str_replace('\\', '\\\\', $value);
   $expression = '/^'.preg_quote($key, '/').'/c\\'.$key.' '.$value;
   exec('sed -i -e '.escapeshellarg($expression).' '.escapeshellarg($conf));
 }
