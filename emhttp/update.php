@@ -20,6 +20,7 @@
  *                  If pathname is relative (no leading '/'), the configuration file will placed
  *                  placed under '/boot/config/plugins/'.
  *                  This parameter may be omitted to perform a command execution only (see #command).
+ *                  Disk Settings sends an empty value for its encryption-key handler, which saves its own state.
  * 
  * #section       : If present, then the ini file consists of a set of named sections, and all of the
  *                  configuration parameters apply to this one particular section.
@@ -73,6 +74,18 @@ function resolve_update_file_path($file) {
 
   return $file;
 }
+$requestedFile = $_POST['#file'] ?? null;
+$encryptionKeyAction = $requestedFile === '' && ($_POST['#include'] ?? null) === '/webGui/include/update.encryption.php';
+$file = null;
+if ($requestedFile !== null && !$encryptionKeyAction) {
+  $file = resolve_update_file_path($requestedFile);
+  if ($file === false) {
+    http_response_code(400);
+    syslog(LOG_INFO, 'Invalid #file path');
+    exit;
+  }
+}
+
 // unRAID update control
 readfile('update.htm');
 flush();
@@ -80,13 +93,12 @@ flush();
 $docroot = $_SERVER['DOCUMENT_ROOT'] ?: "/usr/local/emhttp";
 require_once "$docroot/plugins/dynamix/include/Wrappers.php";
 
-if (isset($_POST['#file'])) {
-  $file = resolve_update_file_path($_POST['#file']);
-  if ($file === false) {
-    http_response_code(400);
-    syslog(LOG_INFO, 'Invalid #file path');
-    exit;
-  }
+if ($encryptionKeyAction) {
+  require "$docroot/webGui/include/update.encryption.php";
+  exit;
+}
+
+if ($file !== null) {
   $raw_file = isset($_POST['#raw_file']) ? ($_POST['#raw_file'] === 'true') : false;
   $section = $_POST['#section'] ?? false;
   $cleanup = isset($_POST['#cleanup']);
