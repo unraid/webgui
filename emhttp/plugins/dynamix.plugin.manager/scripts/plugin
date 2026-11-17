@@ -452,10 +452,6 @@ function plugin($method, $plugin_file, &$error) {
     if (isset($file->attributes()->Method)) {
       if (!in_array($method, explode(" ", $file->attributes()->Method))) continue;
     } elseif ($method != 'install') continue;
-    if ($file->URL && !preg_match('/\A[0-9a-f]{64}\z/Di',trim((string)$file->SHA256))) {
-      $error = 'external file requires a SHA256 value';
-      return false;
-    }
     $name = $file->attributes()->Name ?: '';
     // bergware - check Unraid version dependency (if present)
     $min = $file->attributes()->Min;
@@ -471,6 +467,10 @@ function plugin($method, $plugin_file, &$error) {
         write("plugin: skipping: ".basename($name)." - Unraid version too high, requires at most version $max\n");
       }
       continue;
+    }
+    if ($file->URL && !preg_match('/\A[0-9a-f]{64}\z/Di',trim((string)$file->SHA256))) {
+      $error = 'external file requires a SHA256 value';
+      return false;
     }
     // Name can be missing but only makes sense if Run attribute is present
     if ($name) {
