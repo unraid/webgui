@@ -23,7 +23,9 @@ $dockerClient = new DockerClient();
 $info = $dockerClient->getDockerContainers();
 
 // start in the order of the Docker tab, stop and pause in the reverse order
-$containers = array_values(array_intersect(DockerUtil::containerOrder(array_column($info,'Name'), array_column($info,'CreatedAt','Name')), $containers));
+// a selected container that Docker returned no details for is kept, after the ordered ones
+$ordered    = array_values(array_intersect(DockerUtil::containerOrder(array_column($info,'Name'), array_column($info,'CreatedAt','Name')), $containers));
+$containers = array_merge($ordered, array_values(array_diff($containers, $ordered)));
 if ($action!='start') $containers = array_reverse($containers);
 foreach ($containers as $ct) {
   if ( $action == "start") {
