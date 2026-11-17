@@ -110,6 +110,27 @@ function encrypt_value($value,$config) {
   return $ciphertext === false ? false : 'v2:'.b64url_encode($nonce).':'.b64url_encode($tag).':'.b64url_encode($ciphertext);
 }
 
+function legacy_crypto_config($config) {
+  if (($config['legacy_cipher'] ?? '') === 'aes-256-cbc' && !empty($config['legacy_key']) && !empty($config['legacy_iv'])) {
+    return ['cipher'=>$config['legacy_cipher'],'key'=>$config['legacy_key'],'iv'=>$config['legacy_iv']];
+  }
+
+  // The old key file lived in RAM. Reconstruct its values after a cold upgrade.
+  $mac = trim((string)@file_get_contents('/sys/class/net/wlan0/address'));
+  if (!preg_match('/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i',$mac)) return false;
+  $dmi = (string)shell_exec('dmidecode -qt1');
+  preg_match('/Manufacturer: ([^\r\n]+)/',$dmi,$manufacturer);
+  $key = preg_replace('/[^0-9a-zA-Z._-]/','_',$manufacturer[1] ?? '').'ABCDEFGH';
+  return ['cipher'=>'aes-256-cbc','key'=>substr($key,0,63),'iv'=>'12'.str_replace(':','',$mac).'34'];
+}
+
+function decrypt_legacy_value($value,$config) {
+  if ($config === false) return false;
+  $ciphertext = base64_decode($value,true);
+  if ($ciphertext === false || $ciphertext === '' || strlen($ciphertext) % 16 !== 0) return false;
+  return openssl_decrypt($ciphertext,$config['cipher'],$config['key'],OPENSSL_RAW_DATA,$config['iv']);
+}
+
 function decrypt_value($value,$config,&$legacy=false) {
   $value = (string)$value;
   if (str_starts_with($value,'v2:')) {
@@ -122,17 +143,40 @@ function decrypt_value($value,$config,&$legacy=false) {
     if ($key === false || strlen($key) !== 32 || $nonce === false || strlen($nonce) !== 12 || $tag === false || strlen($tag) !== 16 || $ciphertext === false) return false;
     return openssl_decrypt($ciphertext,'aes-256-gcm',$key,OPENSSL_RAW_DATA,$nonce,$tag,'');
   }
-  if (($config['legacy_cipher'] ?? '') === 'aes-256-cbc' && !empty($config['legacy_key']) && !empty($config['legacy_iv'])) {
-    $plain = openssl_decrypt($value,$config['legacy_cipher'],$config['legacy_key'],0,$config['legacy_iv']);
-    if ($plain !== false) {
-      $legacy = true;
-      return $plain;
-    }
-  }
-  return false;
+  $plain = decrypt_legacy_value($value,legacy_crypto_config($config));
+  $legacy = $plain !== false;
+  return $plain;
+}
+
+function migrate_wireless_credentials() {
+  $path = '/boot/config/wireless.cfg';
+  if (!file_exists($path)) return true;
+  $contents = @file_get_contents($path);
+  if ($contents === false) return false;
+
+  // Rewrite only successfully decoded legacy credential values from the boot file.
+  $pattern = '/^([ \t]*(?:USERNAME|PASSWORD)[ \t]*=[ \t]*")([a-zA-Z0-9+\/]{22,}={0,2})("[^\r\n]*)/m';
+  if (!preg_match($pattern,$contents)) return true;
+  $config = ensure_crypto_config();
+  if ($config === false || ($legacy = legacy_crypto_config($config)) === false) return false;
+  $updated = preg_replace_callback($pattern, function($match) use ($config,$legacy) {
+    $plain = decrypt_legacy_value($match[2],$legacy);
+    if ($plain === false) return $match[0];
+    $encrypted = encrypt_value($plain,$config);
+    return $encrypted === false ? $match[0] : $match[1].$encrypted.$match[3];
+  }, $contents);
+  if ($updated === null) return false;
+  if ($updated === $contents) return true;
+
+  $docroot = '/usr/local/emhttp';
+  require_once "$docroot/plugins/dynamix/include/Wrappers.php";
+  return file_put_contents_atomic($path,$updated) !== false;
 }
 
 switch ($argv[1] ?? '') {
+case 'migrate-wireless':
+  if (!migrate_wireless_credentials()) exit(1);
+  break;
 case 'reload':
 case 'load':
   if (ensure_crypto_config() === false) exit(1);
