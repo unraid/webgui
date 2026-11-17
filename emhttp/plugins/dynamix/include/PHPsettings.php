@@ -14,6 +14,24 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 
 switch ($_POST['cmd']??'') {
+case 'save':
+  $level = $_POST['error_reporting'] ?? '';
+  $display = $_POST['display_errors'] ?? '';
+  $default = E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED;
+  $levels = [$default, E_ALL, E_ERROR, E_WARNING, E_NOTICE, E_DEPRECATED];
+  if (!in_array($level, array_map('strval', $levels), true) || !in_array($display, ['0', '1'], true)) {
+    http_response_code(400);
+    break;
+  }
+  if ($level === (string)$default) $display = '0';
+  require_once "$docroot/webGui/include/Wrappers.php";
+  $settings = "error_log=\"/var/log/phplog\"\ndisplay_startup_errors=\"0\"\ndisplay_errors=\"$display\"\nlog_errors=\"1\"\nerror_reporting=\"$level\"\n";
+  if (file_put_contents_atomic('/etc/php.d/errors-php.ini', $settings) === false) {
+    http_response_code(500);
+    break;
+  }
+  readfile("$docroot/update.htm");
+  break;
 case 'clear':
   $log = "/var/log/phplog";
   // delete existing file and recreate an empty file

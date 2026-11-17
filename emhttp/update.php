@@ -80,6 +80,11 @@ flush();
 $docroot = $_SERVER['DOCUMENT_ROOT'] ?: "/usr/local/emhttp";
 require_once "$docroot/plugins/dynamix/include/Wrappers.php";
 
+if (($_POST['#file'] ?? null) === '' && ($_POST['#include'] ?? null) === '/webGui/include/update.encryption.php') {
+  require "$docroot/webGui/include/update.encryption.php";
+  exit;
+}
+
 if (isset($_POST['#file'])) {
   $file = resolve_update_file_path($_POST['#file']);
   if ($file === false) {
