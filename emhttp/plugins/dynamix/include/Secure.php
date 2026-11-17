@@ -35,7 +35,14 @@ function shell_args($text) {
       if ($char === '"') {
         $quote = null;
       } elseif ($char === '\\') {
-        $escaped = true;
+        $next = $text[$i + 1] ?? null;
+        if ($next === "\n") {
+          $i++;
+        } elseif ($next !== null && in_array($next, ['$', '`', '"', '\\'], true)) {
+          $escaped = true;
+        } else {
+          $arg .= $char;
+        }
       } else {
         $arg .= $char;
       }
