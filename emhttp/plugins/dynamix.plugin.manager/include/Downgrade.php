@@ -29,6 +29,7 @@ if ($requestMethod !== 'POST') {
 if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
 header('Content-Type: application/json');
 
+// @unraid-downgrade-protocol nonce-v1
 // Issue a short-lived, single-use confirmation nonce before changing boot files.
 if ((_var($_POST,'action') ?: '') === 'prepare') {
   $nonce = bin2hex(random_bytes(32));
@@ -47,7 +48,7 @@ if (!$nonce || !$expected || $expires < time() || !hash_equals($expected,$nonce)
 }
 
 $version = unscript(_var($_POST,'version'));
-if (!preg_match('/\\A[0-9]+\\.[0-9]+\\.[0-9]+(?:[-.][A-Za-z0-9]+)?\\z/D',$version)) {
+if (!preg_match('/\\A[0-9]+\\.[0-9]+\\.[0-9]+(?:[-.][A-Za-z0-9]+)*\\z/D',$version)) {
   http_response_code(400);
   die(json_encode(['error' => _('Invalid version')]));
 }
@@ -61,7 +62,7 @@ if ($bootDir !== '/boot' || $previousDir !== '/boot/previous' || !is_dir($previo
 
 $previousEntries = [];
 foreach (scandir($previousDir) ?: [] as $entry) {
-  if ($entry === '.' || $entry === '..' || !preg_match('/\\Abz[A-Za-z0-9._-]*\\z/D',$entry)) continue;
+  if ($entry !== 'changes.txt' && !preg_match('/\\Abz[A-Za-z0-9._-]*\\z/D',$entry)) continue;
   $source = "$previousDir/$entry";
   if (is_link($source) || !is_file($source)) {
     http_response_code(409);
@@ -76,9 +77,17 @@ if (!isset($previousEntries['bzimage'],$previousEntries['bzroot'])) {
 
 $currentEntries = [];
 foreach (scandir($bootDir) ?: [] as $entry) {
-  if ($entry === '.' || $entry === '..' || !preg_match('/\\Abz[A-Za-z0-9._-]*\\z/D',$entry)) continue;
+  // Keep the active release metadata in the same rollback set as the boot files.
+  $replaceMetadata = $entry === 'changes.txt' && isset($previousEntries[$entry]);
+  if (!$replaceMetadata && !preg_match('/\\Abz[A-Za-z0-9._-]*\\z/D',$entry)) continue;
   $source = "$bootDir/$entry";
-  if (is_link($source) || !is_file($source)) continue;
+  if (is_link($source) || !is_file($source)) {
+    if ($replaceMetadata) {
+      http_response_code(409);
+      die(json_encode(['error' => _('Current boot metadata is invalid')]));
+    }
+    continue;
+  }
   $currentEntries[$entry] = $source;
 }
 
