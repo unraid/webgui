@@ -82,15 +82,15 @@ foreach ($containers as $ct) {
   $updateStatus = substr($ct['NetworkMode'], -4) == ':???' ? 2 : ($info['updated'] == 'true' ? 0 : ($info['updated'] == 'false' ? 1 : 3));
   $template = $info['template']??'';
   $shell = $info['shell']??'';
-  $webGui = html_entity_decode($info['url']??'');
+  $webGui = $info['url']??'';
   $TShostname = isset($ct['TSHostname']) ? $ct['TSHostname'] : '';
-  $TSwebGui = html_entity_decode($info['TSurl']??'');
+  $TSwebGui = $info['TSurl']??'';
   $support = html_entity_decode($info['Support']??'');
   $project = html_entity_decode($info['Project']??'');
   $registry = html_entity_decode($info['registry']??'');
   $donateLink = html_entity_decode($info['DonateLink']??'');
   $readme = html_entity_decode($info['ReadMe']??'');
-  $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s', '%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), addslashes($TSwebGui), $shell, $id, addslashes($support), addslashes($project),addslashes($registry),addslashes($donateLink),addslashes($readme));
+  $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,%s,%s,'%s','%s','%s','%s','%s', '%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, htmlspecialchars(json_encode((string)$webGui, JSON_INVALID_UTF8_SUBSTITUTE), ENT_QUOTES, 'UTF-8'), htmlspecialchars(json_encode((string)$TSwebGui, JSON_INVALID_UTF8_SUBSTITUTE), ENT_QUOTES, 'UTF-8'), $shell, $id, addslashes($support), addslashes($project),addslashes($registry),addslashes($donateLink),addslashes($readme));
   $docker[] = "docker.push({name:'$name',id:'$id',state:$running,pause:$paused,update:$updateStatus});";
   $shape = $running ? ($paused ? 'pause' : 'play') : 'square';
   $status = $running ? ($paused ? 'paused' : 'started') : 'stopped';
@@ -254,7 +254,7 @@ foreach ($containers as $ct) {
             }
           }
           if (!empty($TSwebGui)) {
-            $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("URL").":</span><span class='ui-tailscale-value'>".$TSwebGui."</span></div>";
+            $TSinfo .= "<div class='ui-tailscale-row'><span class='ui-tailscale-label'>"._("URL").":</span><span class='ui-tailscale-value'>".htmlspecialchars($TSwebGui, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."</span></div>";
           }
           if (!empty($TSstats["Self"]["KeyExpiry"])) {
             $TS_expiry = new DateTime($TSstats["Self"]["KeyExpiry"]);
