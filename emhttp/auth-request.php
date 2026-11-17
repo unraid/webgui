@@ -7,7 +7,7 @@ function getRequestUriPath(): string {
   return is_string($requestUri) ? $requestUri : '/';
 }
 
-$requestUri = getRequestUriPath();
+$consoleAuth = ($_SERVER['WEBGUI_CONSOLE_AUTH'] ?? '') === '1';
 
 // only start the session if a session cookie exists
 if (isset($_COOKIE[session_name()])) {
@@ -18,7 +18,7 @@ if (isset($_COOKIE[session_name()])) {
       $_SESSION['unraid_login'] = time();
     }
     session_write_close();
-    if (str_starts_with($requestUri, '/wsproxy/') && !wsproxy_request_is_allowed($requestUri)) {
+    if ($consoleAuth && !wsproxy_port_is_allowed($_SERVER['WEBGUI_CONSOLE_PORT'] ?? '')) {
       http_response_code(403);
     } else {
       http_response_code(200);
@@ -26,6 +26,11 @@ if (isset($_COOKIE[session_name()])) {
     exit;
   }
   session_write_close();
+}
+
+if ($consoleAuth) {
+  http_response_code(401);
+  exit;
 }
 
 function isPathInDocroot(string $realPath, string $docroot): bool {
@@ -53,17 +58,16 @@ function isWebComponentsRequest(string $requestUri): bool {
  * Extract allowed VNC WebSocket and SPICE graphics ports from domain XML.
  */
 function wsproxy_ports_from_xml(string $xml): array {
-  $ports = [];
-  if (!preg_match_all('/<graphics\b([^>]*)>/i', $xml, $graphicsMatches)) {
+  $domain = new DOMDocument();
+  if ($xml === '' || !@$domain->loadXML($xml, LIBXML_NONET) || $domain->doctype !== null
+      || !$domain->documentElement->hasAttribute('id')) {
     return [];
   }
 
-  foreach ($graphicsMatches[1] as $attributes) {
-    if (!preg_match('/\btype\s*=\s*([\'\"])([^\'\"]+)\1/i', $attributes, $typeMatch)) {
-      continue;
-    }
-
-    $portAttribute = match (strtolower($typeMatch[2])) {
+  $ports = [];
+  $xpath = new DOMXPath($domain);
+  foreach ($xpath->query('/domain/devices/graphics') as $graphics) {
+    $portAttribute = match ($graphics->getAttribute('type')) {
       'vnc' => 'websocket',
       'spice' => 'port',
       default => null,
@@ -72,14 +76,19 @@ function wsproxy_ports_from_xml(string $xml): array {
       continue;
     }
 
-    $portPattern = '/\b' . $portAttribute . '\s*=\s*([\'\"])(-?\d+)\1/i';
-    if (preg_match($portPattern, $attributes, $portMatch)) {
-      $port = (int)$portMatch[2];
-      $minimumPort = $portAttribute === 'websocket' ? 5700 : 5900;
-      $maximumPort = $portAttribute === 'websocket' ? 5899 : 5999;
-      if ($port >= $minimumPort && $port <= $maximumPort) {
-        $ports[$port] = true;
-      }
+    // Nginx connects over IPv4 loopback, so only choose a TCP listener that covers it.
+    $listen = $xpath->query('listen', $graphics)->item(0);
+    $address = $listen ? $listen->getAttribute('address') : $graphics->getAttribute('listen');
+    if (($listen && $listen->getAttribute('type') !== 'address') || !in_array($address, ['0.0.0.0', '127.0.0.1'], true)) {
+      continue;
+    }
+
+    $port = filter_var($graphics->getAttribute($portAttribute), FILTER_VALIDATE_INT, ['options' => [
+      'min_range' => $portAttribute === 'websocket' ? 5700 : 5900,
+      'max_range' => $portAttribute === 'websocket' ? 5899 : 65535,
+    ]]);
+    if ($port !== false) {
+      $ports[$port] = true;
     }
   }
 
@@ -96,19 +105,18 @@ function wsproxy_active_ports(): array {
     return [];
   }
 
-  $domainList = @shell_exec(escapeshellarg($virsh) . ' list --name 2>/dev/null');
+  $domainList = @shell_exec(escapeshellarg($virsh) . ' list --uuid 2>/dev/null');
   if (!is_string($domainList)) {
     return [];
   }
 
   $ports = [];
-  foreach (preg_split('/\R/', trim($domainList)) as $domain) {
-    $domain = trim($domain);
-    if ($domain === '') {
+  foreach (preg_split('/\R/', trim($domainList)) as $uuid) {
+    if (!preg_match('/\A[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\z/i', $uuid)) {
       continue;
     }
 
-    $xml = @shell_exec(escapeshellarg($virsh) . ' dumpxml ' . escapeshellarg($domain) . ' 2>/dev/null');
+    $xml = @shell_exec(escapeshellarg($virsh) . ' dumpxml ' . escapeshellarg($uuid) . ' 2>/dev/null');
     if (!is_string($xml)) {
       continue;
     }
@@ -124,13 +132,13 @@ function wsproxy_active_ports(): array {
 /**
  * Check that a proxy request targets an allowed port on a running VM.
  */
-function wsproxy_request_is_allowed(string $requestUri): bool {
-  if (!preg_match('#^/wsproxy/([0-9]{4,5})/$#', $requestUri, $matches)) {
+function wsproxy_port_is_allowed(string $port): bool {
+  if (!preg_match('/\A[1-9][0-9]{3,4}\z/', $port)) {
     return false;
   }
 
-  $port = (int)$matches[1];
-  return $port >= 5700 && $port <= 5999 && in_array($port, wsproxy_active_ports(), true);
+  $port = (int)$port;
+  return $port >= 5700 && $port <= 65535 && in_array($port, wsproxy_active_ports(), true);
 }
 
 function getAllowedExternalPublicAssetTargets(): array {

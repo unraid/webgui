@@ -395,6 +395,14 @@ build_locations(){
 	    fastcgi_param SCRIPT_FILENAME /usr/local/emhttp/auth-request.php;
 	    fastcgi_param SCRIPT_NAME /auth-request.php;
 	}
+	location = /_webgui-console-auth {
+	    internal;
+	    include fastcgi_params;
+	    fastcgi_param SCRIPT_FILENAME /usr/local/emhttp/auth-request.php;
+	    fastcgi_param SCRIPT_NAME /auth-request.php;
+	    fastcgi_param WEBGUI_CONSOLE_AUTH 1;
+	    fastcgi_param WEBGUI_CONSOLE_PORT $webgui_console_port;
+	}
 	#
 	# Redirect to login page on failed authentication (401)
 	#
@@ -451,10 +459,11 @@ build_locations(){
 	# websocket proxy
 	#
 	# The auth handler limits the captured port to an active VM graphics endpoint.
-	location ~ "^/wsproxy/(5[7-9][0-9]{2})/$" {
-	    auth_request /_webgui-stream-auth;
+	location ~ "^/wsproxy/([1-9][0-9]{3,4})/$" {
+	    set $webgui_console_port $1;
+	    auth_request /_webgui-console-auth;
 	    proxy_read_timeout 3600;
-	    proxy_pass http://127.0.0.1:$1;
+	    proxy_pass http://127.0.0.1:$webgui_console_port;
 	    proxy_http_version 1.1;
 	    proxy_set_header Host $host;
 	    proxy_set_header Upgrade $http_upgrade;

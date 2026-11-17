@@ -1316,7 +1316,6 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	</tr>
 	<?if ($i == 0) {
 		$hiddenport = $hiddenwsport = "hidden";
-		$portMax = 5999;
 		if ($arrGPU['autoport'] == "no") {
 			if ($arrGPU['protocol'] == "vnc") $hiddenport = $hiddenwsport = "";
 			if ($arrGPU['protocol'] == "spice") $hiddenport = "";
@@ -1353,7 +1352,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 			?>
 			</select></span>
 			<span id="Porttext" class="label <?=$hiddenport?>">_(VM Console Port)_:</span>
-			<input id="port" onchange="checkVNCPorts()" min="5900" max="<?=$portMax?>" type="number" size="5" maxlength="5" class="trim second <?=$hiddenport?>" name="gpu[<?=$i?>][port]" value="<?=$arrGPU['port']?>">
+			<input id="port" onchange="checkVNCPorts()" min="5900" max="65535" type="number" size="5" maxlength="5" class="trim second <?=$hiddenport?>" name="gpu[<?=$i?>][port]" value="<?=$arrGPU['port']?>">
 			<span id="WSPorttext" class="label <?=$hiddenwsport?>">_(VM Console WS Port)_:</span>
 			<input id="wsport" onchange="checkVNCPorts()" min="5700" max="5899" type="number" size="5" maxlength="5" class="trim second <?=$hiddenwsport?>" name="gpu[<?=$i?>][wsport]" value="<?=$arrGPU['wsport']?>">
 		</td>
@@ -1441,7 +1440,7 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	<p class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced protocol">
 		<b>Virtual auto port</b><br>
 		Set this to No to specify manual ports for VNC or SPICE. VNC uses two ports; SPICE uses one. Leave it set to Yes to let the system choose.<br>
-		VNC and SPICE graphics ports: 5900-5999.<br>
+		VNC and SPICE graphics ports: 5900-65535.<br>
 		VNC websocket port: 5700-5899.
 	</p>
 	<p class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced vncmodel">
@@ -2162,7 +2161,7 @@ function updateVMConsolePortFields() {
 	const manualPort = $("#autoport").val() === "no";
 	const isVNC = protocol === "vnc";
 
-	$("#port").attr({min: 5900, max: 5999});
+	$("#port").attr({min: 5900, max: 65535});
 	$("#wsport").attr({min: 5700, max: 5899});
 	$("#port,#Porttext").toggleClass('hidden', !manualPort);
 	$("#wsport,#WSPorttext").toggleClass('hidden', !(manualPort && isVNC));
@@ -2191,8 +2190,7 @@ function checkVNCPorts() {
 	const protocol = $protocol.val() || "vnc";
 	const port = Number($port.val());
 	const wsport = Number($wsport.val());
-	const vmrcPortMax = 5999;
-	const portValid = Number.isInteger(port) && port >= 5900 && port <= vmrcPortMax;
+	const portValid = Number.isInteger(port) && port >= 5900 && port <= 65535;
 	const wsPortEditable = $wsport.length && !$wsport.is(":disabled") && $wsport.is(":visible");
 	const wsPortValid = protocol !== "vnc"
 		|| !wsPortEditable
@@ -2202,8 +2200,8 @@ function checkVNCPorts() {
 		swal({
 			title: "_(Invalid Port)_",
 			text: protocol === "spice"
-				? "_(SPICE graphics port must be between 5900 and 5999.)_"
-				: "_(VNC graphics port must be between 5900 and 5999, and VNC websocket port must be between 5700 and 5899.)_",
+				? "_(SPICE graphics port must be between 5900 and 65535.)_"
+				: "_(VNC graphics port must be between 5900 and 65535, and VNC websocket port must be between 5700 and 5899.)_",
 			type: "error",
 			confirmButtonText: "_(Ok)_"
 		});
