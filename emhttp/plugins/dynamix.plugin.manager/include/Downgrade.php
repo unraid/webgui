@@ -53,6 +53,15 @@ if (!preg_match('/\\A[0-9]+\\.[0-9]+\\.[0-9]+(?:[-.][A-Za-z0-9]+)*\\z/D',$versio
   die(json_encode(['error' => _('Invalid version')]));
 }
 
+$mask = umask(0077);
+$bootUpdateLock = @fopen('/var/run/unraid-boot-update.lock', 'ce');
+umask($mask);
+if (!$bootUpdateLock || !flock($bootUpdateLock, LOCK_EX | LOCK_NB)) {
+  http_response_code(409);
+  die(json_encode(['error' => _('Another OS update operation is running')]));
+}
+
+// Keep the lock descriptor open through the boot switch, marker commit and any rollback.
 $bootDir = realpath('/boot');
 $previousDir = realpath('/boot/previous');
 if ($bootDir !== '/boot' || $previousDir !== '/boot/previous' || !is_dir($previousDir)) {
@@ -61,8 +70,9 @@ if ($bootDir !== '/boot' || $previousDir !== '/boot/previous' || !is_dir($previo
 }
 
 $previousEntries = [];
+$releaseFiles = ['changes.txt', 'license.txt', 'make_bootable.bat', 'make_bootable_linux', 'make_bootable_mac', 'syslinux.cfg-'];
 foreach (scandir($previousDir) ?: [] as $entry) {
-  if ($entry !== 'changes.txt' && !preg_match('/\\Abz[A-Za-z0-9._-]*\\z/D',$entry)) continue;
+  if (!in_array($entry, $releaseFiles, true) && !preg_match('/\\A(?:bz|memtest)[A-Za-z0-9._-]*\\z/D',$entry)) continue;
   $source = "$previousDir/$entry";
   if (is_link($source) || !is_file($source)) {
     http_response_code(409);
@@ -75,16 +85,29 @@ if (!isset($previousEntries['bzimage'],$previousEntries['bzroot'])) {
   die(json_encode(['error' => _('Previous boot set is incomplete')]));
 }
 
+$previousChanges = isset($previousEntries['changes.txt']) ? @file($previousEntries['changes.txt']) : false;
+$previousVersion = null;
+foreach (array_slice($previousChanges ?: [], 0, 4) as $line) {
+  if (preg_match('/version\s+(\S+)/i', $line, $match)) {
+    $previousVersion = $match[1];
+    break;
+  }
+}
+if ($previousVersion !== $version) {
+  http_response_code(409);
+  die(json_encode(['error' => _('Previous version changed; reload the page and try again')]));
+}
+
 $currentEntries = [];
 foreach (scandir($bootDir) ?: [] as $entry) {
-  // Keep the active release metadata in the same rollback set as the boot files.
-  $replaceMetadata = $entry === 'changes.txt' && isset($previousEntries[$entry]);
-  if (!$replaceMetadata && !preg_match('/\\Abz[A-Za-z0-9._-]*\\z/D',$entry)) continue;
+  // Release-managed flat files are staged by unRAIDServer.plg alongside the boot images.
+  $replaceReleaseFile = in_array($entry, $releaseFiles, true) && isset($previousEntries[$entry]);
+  if (!$replaceReleaseFile && !preg_match('/\\A(?:bz|memtest)[A-Za-z0-9._-]*\\z/D',$entry)) continue;
   $source = "$bootDir/$entry";
   if (is_link($source) || !is_file($source)) {
-    if ($replaceMetadata) {
+    if ($replaceReleaseFile) {
       http_response_code(409);
-      die(json_encode(['error' => _('Current boot metadata is invalid')]));
+      die(json_encode(['error' => _('Current release file is invalid')]));
     }
     continue;
   }
@@ -99,7 +122,11 @@ if (!@mkdir($tmpdir,0700)) {
 
 $movedCurrent = [];
 $movedPrevious = [];
+$readme = "$docroot/plugins/unRAIDServer/README.md";
+$pendingReadme = dirname($readme).'/.downgrade-readme.'.bin2hex(random_bytes(16));
 try {
+  $message = "**"._('DOWNGRADE TO VERSION')." $version**";
+  if (@file_put_contents($pendingReadme, $message) !== strlen($message)) throw new RuntimeException('marker');
   foreach ($currentEntries as $entry => $source) {
     $target = "$tmpdir/$entry";
     if (!@rename($source,$target)) throw new RuntimeException('current');
@@ -110,7 +137,9 @@ try {
     if (!@rename($source,$target)) throw new RuntimeException('previous');
     $movedPrevious[$entry] = $target;
   }
+  if (!@rename($pendingReadme, $readme)) throw new RuntimeException('marker');
 } catch (Throwable $error) {
+  @unlink($pendingReadme);
   $restoreFailed = false;
   foreach ($movedPrevious as $entry => $source) if (!@rename($source,"$previousDir/$entry")) $restoreFailed = true;
   foreach ($movedCurrent as $entry => $source) if (!@rename($source,"$bootDir/$entry")) $restoreFailed = true;
@@ -120,6 +149,5 @@ try {
   die(json_encode(['error' => _('Boot switch failed; previous files were restored')]));
 }
 
-file_put_contents("$docroot/plugins/unRAIDServer/README.md","**"._('DOWNGRADE TO VERSION')." $version**");
 die(json_encode(['success' => true, 'version' => $version]));
 ?>
