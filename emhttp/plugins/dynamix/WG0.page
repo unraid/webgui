@@ -232,7 +232,7 @@ String.prototype.desc    = function(){return this.substr(this.lastIndexOf('/'));
 String.prototype.patch   = function(s,t){return t?this.replace(/<source>/g,s).replace(/<target>/,t):this.replace(/<source>/g,s);}
 Array.prototype.bind     = function(w){return (this.join(';')).replace(/<WG>/g,w).replace(/,/g,';');}
 
-var xml = $.cookie('upnp')||'<?=@file_get_contents('/var/tmp/upnp')?>';
+var xml = $.cookie('upnp')||<?=json_encode((string)@file_get_contents('/var/tmp/upnp'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE)?>;
 var netbase = {}, netpool = {}, netport = {}, netbase6 = {}, netpool6 = {};
 
 netbase['wg0']  =  <?=_var($netbase,'wg0')?>;
