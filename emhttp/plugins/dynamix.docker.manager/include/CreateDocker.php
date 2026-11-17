@@ -589,22 +589,22 @@ function makeConfig(opts) {
   var icons = {'Path':'folder-o', 'Port':'minus-square-o', 'Variable':'file-text-o', 'Label':'tags', 'Device':'play-circle-o'};
   var newConfig = $("#templateDisplayConfig").html();
   newConfig =  newConfig.format(
-    stripTags(opts.Name),
-    opts.Target,
-    opts.Default,
-    opts.Mode,
-    opts.Description,
-    opts.Type,
-    opts.Display,
-    opts.Required,
-    opts.Mask,
-    escapeQuote(opts.Value),
+    escapeConfig(stripTags(opts.Name)),
+    escapeConfig(opts.Target),
+    escapeConfig(opts.Default),
+    escapeConfig(opts.Mode),
+    escapeConfig(opts.Description),
+    escapeConfig(opts.Type),
+    escapeConfig(opts.Display),
+    escapeConfig(opts.Required),
+    escapeConfig(opts.Mask),
+    escapeConfig(opts.Value),
     opts.Buttons,
     opts.Required=='true' ? 'required' : '',
-    sprintf('Container %s',opts.Type),
+    escapeConfig(sprintf('Container %s',opts.Type)),
     icons[opts.Type] || 'question'
   );
-  newConfig = "<div id='ConfigNum"+opts.Number+"' class='config_"+opts.Display+"'' >"+newConfig+"</div>";
+  newConfig = "<div id='ConfigNum"+opts.Number+"' class='config_"+escapeConfig(opts.Display)+"'>"+newConfig+"</div>";
   newConfig = $($.parseHTML(newConfig));
   value     = newConfig.find("input[name='confValue[]']");
   if (opts.Type == "Path") {
@@ -613,9 +613,9 @@ function makeConfig(opts) {
     value.attr("onclick", "openFileBrowser(this,'/dev','/dev','',true,true);")
   } else if (opts.Type == "Variable" && opts.Default.split("|").length > 1) {
     var valueOpts = opts.Default.split("|");
-    var newValue = "<select name='confValue[]' class='selectVariable' default='"+valueOpts[0]+"'>";
+    var newValue = "<select name='confValue[]' class='selectVariable' default='"+escapeConfig(valueOpts[0])+"'>";
     for (var i = 0; i < valueOpts.length; i++) {
-      newValue += "<option value='"+valueOpts[i]+"' "+(opts.Value == valueOpts[i] ? "selected" : "")+">"+valueOpts[i]+"</option>";
+      newValue += "<option value='"+escapeConfig(valueOpts[i])+"' "+(opts.Value == valueOpts[i] ? "selected" : "")+">"+escapeConfig(valueOpts[i])+"</option>";
     }
     newValue += "</select>";
     value.replaceWith(newValue);
@@ -633,8 +633,10 @@ function stripTags(string) {
   return string.replace(/(<([^>]+)>)/ig,"");
 }
 
-function escapeQuote(string) {
-  return string.replace(new RegExp('"','g'),"&quot;");
+function escapeConfig(string) {
+  return string.replace(/[&<>"']/g, function(character) {
+    return {'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[character];
+  });
 }
 
 function makeAllocations(container,current) {
