@@ -491,6 +491,10 @@ function my_rmdir($dirname) {
         $mountpath = $mountpoint !== '' ? realpath($mountpoint) : false;
         // A path inside a dataset resolves to the containing dataset, too.
         if ($zfsdataset !== '' && $dirpath !== false && $mountpath === $dirpath) {
+          // Pool and share roots can contain VM disks without belonging to the VM.
+          if (substr_count($zfsdataset, '/') < 2) {
+            return ['rtncode' => 0, 'dataset' => $zfsdataset, 'type' => $fstype];
+          }
           $zfsoutput = array();
           $cmdstr = "zfs destroy ".escapeshellarg($zfsdataset)."  2>&1 ";
           $error = exec($cmdstr,$zfsoutput,$rtncode);
