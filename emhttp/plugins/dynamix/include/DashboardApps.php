@@ -83,12 +83,13 @@ if ($_POST['docker']) {
     $shell = $info['shell'];
     $webGui = html_entity_decode($info['url']);
     $TSwebGui = html_entity_decode($info['TSurl']);
+    $NBwebGui = html_entity_decode($info['NBurl'] ?? '');
     $support = html_entity_decode($info['Support']);
     $project = html_entity_decode($info['Project']);
     $registry = html_entity_decode($info['registry']);
     $donateLink = html_entity_decode($info['DonateLink']);
     $readme = html_entity_decode($info['ReadMe']);
-    $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), addslashes($TSwebGui), $shell, $id, addslashes($support), addslashes($project), addslashes($registry), addslashes($donateLink), addslashes($readme));
+    $menu = sprintf("onclick=\"addDockerContainerContext('%s','%s','%s',%s,%s,%s,%s,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')\"", addslashes($name), addslashes($ct['ImageId']), addslashes($template), $running, $paused, $updateStatus, $is_autostart, addslashes($webGui), addslashes($TSwebGui), $shell, $id, addslashes($support), addslashes($project), addslashes($registry), addslashes($donateLink), addslashes($readme), addslashes($NBwebGui));
     $shape = $running ? ($paused ? 'pause' : 'play') : 'square';
     $status = $running ? ($paused ? 'paused' : 'started') : 'stopped';
     $color = $status=='started' ? 'green-text' : ($status=='paused' ? 'orange-text' : 'red-text');

@@ -2549,6 +2549,48 @@ If state directory detection fails on startup, you can specify a persistent dire
 Enable this to install `ping`, `nslookup`, `curl`, and `speedtest-cli` into the container to help troubleshoot networking issues. Once the issues are resolved we recommend disabling this to reduce the size of the container.
 :end
 
+:docker_netbird_help:
+Enable NetBird to add this container as a peer on your NetBird network. This cannot be combined with Tailscale on the same container.
+:end
+
+:docker_netbird_hostname_help:
+Provide the hostname for this container on your NetBird network. It defaults to the container name.
+NetBird sets the peer name when the container first joins. To rename it later, rename the peer in the NetBird dashboard.
+:end
+
+:docker_netbird_management_url_help:
+Provide the URL of your self-hosted NetBird management server, for example <code>https://netbird.example.com:443</code>. Leave this empty to use NetBird Cloud.
+:end
+
+:docker_netbird_setup_key_help:
+Optional key from the NetBird dashboard to register this container without an interactive login. Leave this empty to log in with the link shown in the container log.
+
+The key is stored unencrypted in the Docker template on the flash drive, and is visible in the container configuration and in the Docker command output. Prefer a key with a limited lifetime and usage count.
+:end
+
+:docker_netbird_userspace_networking_help:
+When enabled, NetBird runs without any additional privileges. Services in the container are reachable from your NetBird network, including services that only listen on localhost, subject to your NetBird access policies. NetBird also starts a SOCKS5 proxy on 127.0.0.1:1080 inside the container, so that port is not available to the application.
+
+When disabled, the container gets a NetBird network interface. This requires access to /dev/net/tun and the NET_ADMIN capability, which are added automatically.
+:end
+
+:docker_netbird_ssh_help:
+Enable the NetBird SSH server to allow SSH access to this container from your NetBird network, subject to your NetBird access policies.
+For more details, see the <a href="https://docs.netbird.io/how-to/ssh" target="_blank">NetBird SSH</a> documentation.
+:end
+
+:docker_netbird_show_advanced_help:
+Show advanced NetBird settings.
+:end
+
+:docker_netbird_extra_param_help:
+Additional parameters for the <code>netbird up</code> command. Support for these is not available beyond confirming that they are passed to NetBird correctly.
+:end
+
+:docker_netbird_statedir_help:
+Provide a persistent path in the container for the NetBird state, which holds the keys of this peer. If this path is not persistent, the container has to register again after every update. Leave this empty to store it on the host in the .netbird folder inside this container's folder in the default appdata path.
+:end
+
 :docker_privileged_help:
 For containers that require the use of host-device access directly or need full exposure to host capabilities, this option will need to be selected.
 For more information, see this link: <a href="https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities" target="_blank">https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities</a>

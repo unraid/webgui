@@ -202,6 +202,17 @@ function postToXML($post, $setOwnership=false) {
     }
   }
   $xml->TailscaleStateDir            = xml_encode($post['TSstatedir']);
+  // Tailscale and NetBird are mutually exclusive, the form only allows one of them
+  if (isset($post['contNetbird']) && strtolower($post['contNetbird']) == 'on' && strtolower($post['contTailscale'] ?? '') != 'on') {
+    $xml->NetbirdEnabled             = 'true';
+    $xml->NetbirdHostname            = xml_encode($post['NBhostname']);
+    $xml->NetbirdManagementURL       = xml_encode($post['NBmanagementurl']);
+    $xml->NetbirdSetupKey            = xml_encode($post['NBsetupkey']);
+    $xml->NetbirdUserspaceNetworking = xml_encode($post['NBuserspacenetworking']);
+    $xml->NetbirdSSH                 = xml_encode($post['NBssh']);
+    $xml->NetbirdParams              = xml_encode($post['NBextraparams']);
+    $xml->NetbirdStateDir            = xml_encode($post['NBstatedir']);
+  }
   $dom = new DOMDocument('1.0');
   $dom->preserveWhiteSpace = false;
   $dom->formatOutput = true;
@@ -260,6 +271,14 @@ function xmlToVar($xml) {
   $out['TailscaleParams']              = xml_decode($xml->TailscaleParams ?? '');
   $out['TailscaleStateDir']            = xml_decode($xml->TailscaleStateDir ?? '');
   $out['TailscaleTroubleshooting']     = xml_decode($xml->TailscaleTroubleshooting ?? '');
+  $out['NetbirdEnabled']               = xml_decode($xml->NetbirdEnabled ?? '');
+  $out['NetbirdHostname']              = xml_decode($xml->NetbirdHostname ?? '');
+  $out['NetbirdManagementURL']         = xml_decode($xml->NetbirdManagementURL ?? '');
+  $out['NetbirdSetupKey']              = xml_decode($xml->NetbirdSetupKey ?? '');
+  $out['NetbirdUserspaceNetworking']   = xml_decode($xml->NetbirdUserspaceNetworking ?? '');
+  $out['NetbirdSSH']                   = xml_decode($xml->NetbirdSSH ?? '');
+  $out['NetbirdParams']                = xml_decode($xml->NetbirdParams ?? '');
+  $out['NetbirdStateDir']              = xml_decode($xml->NetbirdStateDir ?? '');
   $out['Config']                       = [];
   if (isset($xml->Config)) {
     foreach ($xml->Config as $config) {
@@ -394,8 +413,28 @@ function xmlSecurity(&$template) {
   }
 }
 
+// A container that joins another container's network uses that container's network mode
+function effectiveNetwork($network) {
+  // Follow chained container: networks, with a hop limit against cycles
+  for ($hops = 0; $hops < 10 && preg_match('/^container:(.+)/', $network, $m); $hops++) $network = (new DockerClient())->getContainerDetails($m[1])['HostConfig']['NetworkMode'] ?? '';
+  // A target that can't be resolved counts as host, so the guards fail closed
+  return $network === '' || str_starts_with($network, 'container:') ? 'host' : $network;
+}
+
+// The Tailscale and NetBird hooks need the image's own Entrypoint and Cmd to start the application
+function addOriginalCommand($cmd, $repository, $name) {
+  if (!str_contains($cmd, "--entrypoint='/opt/unraid/")) return $cmd;
+  $DockerClient = new DockerClient();
+  $image = $DockerClient->getDockerJSON('/images/'.$repository.'/json')['Config'] ?? [];
+  $env = [];
+  foreach (['ENTRYPOINT' => 'Entrypoint', 'CMD' => 'Cmd'] as $var => $key) if (isset($image[$key])) $env[] = "ORG_$var=" . implode(' ', array_map('escapeshellarg', $image[$key]));
+  // Fall back to the values of the container being replaced if the image can't be inspected
+  if (!$image) $env = preg_grep('/^ORG_(ENTRYPOINT|CMD)=/', $DockerClient->getContainerDetails($name)['Config']['Env'] ?? []);
+  return $env ? str_replace('-l net.unraid.docker.managed=dockerman', '-e '.implode(' -e ', array_map('escapeshellarg', $env)).' -l net.unraid.docker.managed=dockerman', $cmd) : $cmd;
+}
+
 function xmlToCommand($xml, $create_paths=false) {
-  global $docroot, $var, $driver;
+  global $docroot, $var, $driver, $dockercfg;
   $xml           = xmlToVar($xml);
   $cmdName       = strlen($xml['Name']) ? '--name='.escapeshellarg($xml['Name']) : '';
   $cmdPrivileged = strtolower($xml['Privileged'])=='true' ? '--privileged=true' : '';
@@ -470,6 +509,9 @@ function xmlToCommand($xml, $create_paths=false) {
   $TS_accept_routes ='';
   $TS_postargs = '';
   // Get all information from xml and create variables for cmd
+  // The form hides both options on Host networks, but templates and Extra Parameters can still request them
+  $network = preg_match('/(^|\s)--net(work)?[=\s][\'"]?([^\s\'"]+)/', $xml['ExtraParams'], $m) ? $m[3] : $xml['Network'];
+  if (effectiveNetwork($network) == 'host') $xml['TailscaleEnabled'] = $xml['NetbirdEnabled'] = 'false';
   if ($xml['TailscaleEnabled'] == 'true') {
     $TS_entrypoint = '--entrypoint=\'/opt/unraid/tailscale\'';
     $TS_hook = '-v \'/usr/local/share/docker/tailscale_container_hook\':\'/opt/unraid/tailscale\'';
@@ -502,15 +544,33 @@ function xmlToCommand($xml, $create_paths=false) {
     $TS_troubleshooting = !empty($xml['TailscaleTroubleshooting']) ? '-e TAILSCALE_TROUBLESHOOTING=' . escapeshellarg($xml['TailscaleTroubleshooting']) : '';
     $TS_routes = !empty($xml['TailscaleRoutes']) ? '-e TAILSCALE_ADVERTISE_ROUTES=' . escapeshellarg($xml['TailscaleRoutes']) : '';
     $TS_accept_routes = !empty($xml['TailscaleAcceptRoutes']) && $xml['TailscaleAcceptRoutes'] === 'true' ? '-e TAILSCALE_ACCEPT_ROUTES=true' : '';
-    if (!empty($xml['PostArgs'])) {
-      $split_PostArgs = strpos($xml['PostArgs'], ';');
-      if ($split_PostArgs !== false) {
-        $TS_postargs = !empty(substr($xml['PostArgs'], 0, $split_PostArgs)) ? '-e ORG_POSTARGS=' . escapeshellarg(substr($xml['PostArgs'], 0, $split_PostArgs)) : '';
-        $xml['PostArgs'] = ';' . substr($xml['PostArgs'], $split_PostArgs + 1);
-      } else {
-        $TS_postargs = '-e ORG_POSTARGS=' . escapeshellarg($xml['PostArgs']);
-        $xml['PostArgs'] = '';
-      }
+  }
+  // Get all information from xml and create the NetBird arguments for cmd
+  $NB_args = '';
+  if ($xml['NetbirdEnabled'] == 'true' && $xml['TailscaleEnabled'] != 'true') {
+    $NB_hostname = $xml['NetbirdHostname'] ?: $xml['Name'];
+    $NB_args = "--entrypoint='/opt/unraid/netbird' -v '/usr/local/share/docker/netbird_container_hook':'/opt/unraid/netbird'";
+    $NB_args .= ' -e NETBIRD_HOSTNAME=' . escapeshellarg($NB_hostname) . ' -l net.unraid.docker.netbird.hostname=' . escapeshellarg($NB_hostname);
+    foreach (['NETBIRD_MANAGEMENT_URL' => 'NetbirdManagementURL', 'NETBIRD_SETUP_KEY' => 'NetbirdSetupKey', 'NETBIRD_USERSPACE_NETWORKING' => 'NetbirdUserspaceNetworking', 'NETBIRD_USE_SSH' => 'NetbirdSSH', 'NETBIRD_PARAMS' => 'NetbirdParams', 'NETBIRD_STATE_DIR' => 'NetbirdStateDir'] as $env => $field) {
+      if (!empty($xml[$field])) $NB_args .= " -e $env=" . escapeshellarg($xml[$field]);
+    }
+    // Keep the peer identity on the host so a recreated container rejoins as the same peer
+    $appdata = _var($dockercfg,'DOCKER_APP_CONFIG_PATH');
+    if (empty($xml['NetbirdStateDir']) && $appdata && is_dir($appdata)) $NB_args .= ' -v ' . escapeshellarg(realpath($appdata) . "/{$xml['Name']}/.netbird") . ":'/var/lib/netbird' -e NETBIRD_STATE_DIR='/var/lib/netbird'";
+    // Only add tun and cap to containers with Userspace Networking disabled
+    if ($xml['NetbirdUserspaceNetworking'] == 'false') {
+      if (!preg_match('/--d(evice)?[= ](\'?\/dev\/net\/tun\'?)/', $xml['ExtraParams'])) $NB_args .= " --device='/dev/net/tun'";
+      if (!preg_match('/--cap\-add=NET_ADMIN/', $xml['ExtraParams'])) $NB_args .= ' --cap-add=NET_ADMIN';
+    }
+  }
+  if (($xml['TailscaleEnabled'] == 'true' || $NB_args) && !empty($xml['PostArgs'])) {
+    $split_PostArgs = strpos($xml['PostArgs'], ';');
+    if ($split_PostArgs !== false) {
+      $TS_postargs = !empty(substr($xml['PostArgs'], 0, $split_PostArgs)) ? '-e ORG_POSTARGS=' . escapeshellarg(substr($xml['PostArgs'], 0, $split_PostArgs)) : '';
+      $xml['PostArgs'] = ';' . substr($xml['PostArgs'], $split_PostArgs + 1);
+    } else {
+      $TS_postargs = '-e ORG_POSTARGS=' . escapeshellarg($xml['PostArgs']);
+      $xml['PostArgs'] = '';
     }
   }
 
@@ -571,8 +631,8 @@ function xmlToCommand($xml, $create_paths=false) {
     $pid_limit = "";
   }
 
-  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
-         $cmdName, $TS_entrypoint, $cmdNetwork, $cmdMyIP, $cmdCPUset, $cmdMemory, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_accept_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_target, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
+  $cmd = sprintf($docroot.'/plugins/dynamix.docker.manager/scripts/docker create %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s',
+         $cmdName, $TS_entrypoint, $NB_args, $cmdNetwork, $cmdMyIP, $cmdCPUset, $cmdMemory, $pid_limit, $cmdPrivileged, implode(' -e ', $Variables), $TS_hostname, $TS_exitnode, $TS_exitnode_ip, $TS_lan_access, $TS_routes, $TS_accept_routes, $TS_ssh, $TS_userspace_networking, $TS_serve_funnel, $TS_serve_port, $TS_serve_target, $TS_serve_local_path, $TS_serve_protocol, $TS_serve_protocol_port, $TS_serve_path, $TS_daemon_params, $TS_extra_params, $TS_state_dir, $TS_troubleshooting, $TS_postargs, implode(' -l ', $Labels), $TS_web_ui, $TS_hostname_label, implode(' -p ', $Ports), implode(' -v ', $Volumes), $TS_hook, $TS_cap, $TS_tundev, implode(' --device=', $Devices), $xml['ExtraParams'], escapeshellarg($xml['Repository']), $xml['PostArgs']);
   return [preg_replace('/\s\s+/', ' ', $cmd), $xml['Name'], $xml['Repository']];
 }
 

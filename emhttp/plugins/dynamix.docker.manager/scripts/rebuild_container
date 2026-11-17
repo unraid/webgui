@@ -29,6 +29,8 @@ $xml    = file_get_contents($tmpl);
 [$cmd,$name,$repository] = xmlToCommand($tmpl);
 $old = $DockerClient->getImageID($repository);
 
+$cmd = addOriginalCommand($cmd, $repository, $name);
+
 removeContainer($name,false,false);
 execCommand(str_replace('/docker create ','/docker run -d ',$cmd),false);
 if (!in_array($name,$start)) stopContainer($name,false,false);
