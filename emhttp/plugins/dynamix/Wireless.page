@@ -124,6 +124,10 @@ function manage_wifi(ssid,task) {
       swal({title:decodeURIComponent(ssid),text:text,animation:'none',html:true,confirmButtonText:"_(Join this network)_",showCancelButton:true,cancelButtonText:"_(Cancel)_"},function(join){
         if (join) $('form[name=wifi]').submit();
       });
+    }).fail(function(xhr) {
+      if (xhr.status == 422) {
+        swal({title:"_(Cannot join Wi-Fi network)_",text:xhr.responseText,type:'error',confirmButtonText:"_(Ok)_"});
+      }
     });
   } else {
     swal({title:"_(Missing Network Name)_",animation:'none',html:true,type:'error',confirmButtonText:"_(Ok)_"});

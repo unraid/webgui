@@ -32,6 +32,7 @@ $masks = [
 $_SERVER['REQUEST_URI'] = 'settings';
 require_once "$docroot/webGui/include/Translations.php";
 require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/webGui/include/WirelessState.php";
 
 function escapeSSID($text) {
   return str_replace('"', '\"', $text);
@@ -109,21 +110,25 @@ case 'list':
     $color = $up ? 'blue' : 'red';
 
     foreach ($wlan as $network => $block) {
-      $attr[$network]['ATTR1'] = $block[0] ?? '';
-      $attr[$network]['ATTR2'] = $block[2] ?? '';
-      $attr[$network]['ATTR3'] = $block[4] ?? '';
-      $attr[$network]['ATTR4'] = $block[1] ?? '';
+      $name = htmlspecialchars($network, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+      $ssid = rawurlencode($network);
+      if (!wireless_name_has_quotes($network)) {
+        $attr[$network]['ATTR1'] = $block[0] ?? '';
+        $attr[$network]['ATTR2'] = $block[2] ?? '';
+        $attr[$network]['ATTR3'] = $block[4] ?? '';
+        $attr[$network]['ATTR4'] = $block[1] ?? '';
+      }
       if (isset($wifi[$network]['GROUP'])) {
         if ($network == $alive || $wifi[$network]['GROUP'] == 'active') {
           $echo['active'][] = "<dl><dt>$state:</dt>";
-          $echo['active'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$network</span><i class=\"fa fa-fw fa-wifi hand $color-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),1)\" title=\"$title\"></i><input type=\"button\" class=\"form\" value=\""._('Info')."\" onclick=\"networkInfo('$port')\"></span></dd>";
+          $echo['active'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$name</span><i class=\"fa fa-fw fa-wifi hand $color-text\" onclick=\"manage_wifi('$ssid',1)\" title=\"$title\"></i><input type=\"button\" class=\"form\" value=\""._('Info')."\" onclick=\"networkInfo('$port')\"></span></dd>";
         } else {
           $echo['saved'][] = empty($echo['saved']) ? "<dl><dt>"._('My networks').":</dt>" : "<dt>&nbsp;</dt>";
-          $echo['saved'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$network</span><i class=\"fa fa-wifi hand blue-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),1)\" title=\"$title\"></i></span></dd>";
+          $echo['saved'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$name</span><i class=\"fa fa-wifi hand blue-text\" onclick=\"manage_wifi('$ssid',1)\" title=\"$title\"></i></span></dd>";
         }
       } else {
         $echo['other'][] = empty($echo['other']) ? "<dl><dt>"._('Other networks').":</dt>" : "<dt>&nbsp;</dt>";
-        $echo['other'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$network</span><i class=\"fa fa-wifi hand grey-text\" onclick=\"manage_wifi(encodeURIComponent('$network'),0)\" title=\"$title\"></i></span></dd>";
+        $echo['other'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$name</span><i class=\"fa fa-wifi hand grey-text\" onclick=\"manage_wifi('$ssid',0)\" title=\"$title\"></i></span></dd>";
       }
     }
     if (empty($echo['active'])) $echo['active'][] = "<dl><dt>"._('Connected').":</dt><dd>"._('None')."</dd>";
@@ -137,9 +142,15 @@ case 'list':
   echo json_encode($echo);
   break;
 case 'join':
+  $ssid = rawurldecode($_POST['ssid']);
+  if (wireless_name_has_quotes($ssid)) {
+    http_response_code(422);
+    header('Content-Type: text/plain; charset=UTF-8');
+    echo _('Wi-Fi names containing single or double quotes are not supported.');
+    break;
+  }
   if (is_readable($ssl)) extract(parse_ini_file($ssl));
   $token   = parse_ini_file($var)['csrf_token'];
-  $ssid    = escapeSSID(rawurldecode($_POST['ssid']));
   $drop    = $_POST['task'] == 1;
   $manual  = $_POST['task'] == 3;
   $user    = _var($wifi[$ssid],'USERNAME') && isset($cipher, $key, $iv) ? openssl_decrypt($wifi[$ssid]['USERNAME'], $cipher, $key, 0, $iv) : _var($wifi[$ssid],'USERNAME');

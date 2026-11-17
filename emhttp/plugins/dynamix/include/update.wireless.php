@@ -11,6 +11,13 @@
  */
 ?>
 <?
+require_once "$docroot/webGui/include/WirelessState.php";
+
+if (is_string($section) && wireless_name_has_quotes($section)) {
+  write_log('Wi-Fi names containing single or double quotes are not supported.');
+  exit;
+}
+
 $open_ssl = "/usr/local/emhttp/webGui/scripts/open_ssl";
 
 // encrypt username and password before saving (if existing)

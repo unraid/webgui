@@ -1,5 +1,10 @@
 <?php
 
+function wireless_name_has_quotes(string $name): bool
+{
+    return strpbrk($name, "'\"") !== false;
+}
+
 function read_wireless_state(string $path): array
 {
     if (!is_readable($path)) return [];
