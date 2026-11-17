@@ -58,13 +58,16 @@ case 'save':
   if (in_array(pathinfo($source,PATHINFO_EXTENSION),['txt','conf','png'])) {
     exec('zip -'.(string)$opts.' '.escapeshellarg($destination).' '.escapeshellarg($source));
   } else {
-    $tmp = tempnam('/var/tmp', 'download-');
-    if ($tmp === false || !copy($source, $tmp)) {
-      if ($tmp !== false) @unlink($tmp);
-      break;
+    $directory = '/var/tmp/download-'.bin2hex(random_bytes(16));
+    if (!mkdir($directory, 0700)) break;
+    $tmp = $directory.'/'.basename($source).'.txt';
+    try {
+      if (!copy($source, $tmp)) break;
+      exec('zip -'.(string)$opts.' '.escapeshellarg($destination).' '.escapeshellarg($tmp));
+    } finally {
+      @unlink($tmp);
+      rmdir($directory);
     }
-    exec('zip -'.(string)$opts.' '.escapeshellarg($destination).' '.escapeshellarg($tmp));
-    @unlink($tmp);
   }
   echo "/$file";
   break;
