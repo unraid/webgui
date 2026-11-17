@@ -89,7 +89,13 @@ case 'list':
   $title = _('Connect to WiFi network');
   $port  = array_key_first($wifi);
   $carrier = "/sys/class/net/$port/carrier";
-  $echo  = $wlan = [];
+  $echo  = [
+    'active' => ['heading' => _('Connected'), 'empty' => _('None'), 'items' => []],
+    'saved'  => ['heading' => _('My networks'), 'empty' => _('None'), 'items' => []],
+    'other'  => ['heading' => _('Other networks'), 'empty' => _('None'), 'items' => [], 'visible' => !$load],
+    'port'   => $port
+  ];
+  $wlan = [];
   foreach ($wifi as $network => $block) {
     if ($network == $port) continue;
     $wlan[$network][0] = $block['ATTR1'] ?? '';
@@ -108,10 +114,9 @@ case 'list':
     $alive = $up ? exec("iw ".escapeshellarg($port)." link 2>/dev/null | grep -Pom1 'SSID: \K.+'") : '';
     $state = $up ? _('Connected') : _('Disconnected');
     $color = $up ? 'blue' : 'red';
+    $echo['active']['heading'] = $state;
 
     foreach ($wlan as $network => $block) {
-      $name = htmlspecialchars($network, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-      $ssid = rawurlencode($network);
       if (!wireless_name_has_quotes($network)) {
         $attr[$network]['ATTR1'] = $block[0] ?? '';
         $attr[$network]['ATTR2'] = $block[2] ?? '';
@@ -120,23 +125,31 @@ case 'list':
       }
       if (isset($wifi[$network]['GROUP'])) {
         if ($network == $alive || $wifi[$network]['GROUP'] == 'active') {
-          $echo['active'][] = "<dl><dt>$state:</dt>";
-          $echo['active'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$name</span><i class=\"fa fa-fw fa-wifi hand $color-text\" onclick=\"manage_wifi('$ssid',1)\" title=\"$title\"></i><input type=\"button\" class=\"form\" value=\""._('Info')."\" onclick=\"networkInfo('$port')\"></span></dd>";
+          $echo['active']['items'][] = [
+            'network' => $network,
+            'task' => 1,
+            'color' => $color,
+            'title' => $title,
+            'info' => true,
+            'infoLabel' => _('Info')
+          ];
         } else {
-          $echo['saved'][] = empty($echo['saved']) ? "<dl><dt>"._('My networks').":</dt>" : "<dt>&nbsp;</dt>";
-          $echo['saved'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$name</span><i class=\"fa fa-wifi hand blue-text\" onclick=\"manage_wifi('$ssid',1)\" title=\"$title\"></i></span></dd>";
+          $echo['saved']['items'][] = [
+            'network' => $network,
+            'task' => 1,
+            'color' => 'blue',
+            'title' => $title
+          ];
         }
       } else {
-        $echo['other'][] = empty($echo['other']) ? "<dl><dt>"._('Other networks').":</dt>" : "<dt>&nbsp;</dt>";
-        $echo['other'][] = "<dd><span class=\"inline-flex flex-row items-center gap-2\"><span>$name</span><i class=\"fa fa-wifi hand grey-text\" onclick=\"manage_wifi('$ssid',0)\" title=\"$title\"></i></span></dd>";
+        $echo['other']['items'][] = [
+          'network' => $network,
+          'task' => 0,
+          'color' => 'grey',
+          'title' => $title
+        ];
       }
     }
-    if (empty($echo['active'])) $echo['active'][] = "<dl><dt>"._('Connected').":</dt><dd>"._('None')."</dd>";
-    if (empty($echo['saved'])) $echo['saved'][] = "<dl><dt>"._('My networks').":</dt><dd>"._('None')."</dd>";
-    if (empty($echo['other'])) $echo['other'][] = $load ? "" : "<dl><dt>"._('Other networks').":</dt><dd>"._('None')."</dd>";
-    $echo['active'] = implode($echo['active']);
-    $echo['saved'] = implode($echo['saved']);
-    $echo['other'] = implode($echo['other']);
     saveAttr();
   }
   echo json_encode($echo);
@@ -151,6 +164,7 @@ case 'join':
   }
   if (is_readable($ssl)) extract(parse_ini_file($ssl));
   $token   = parse_ini_file($var)['csrf_token'];
+  $section = htmlspecialchars($ssid, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
   $drop    = $_POST['task'] == 1;
   $manual  = $_POST['task'] == 3;
   $user    = _var($wifi[$ssid],'USERNAME') && isset($cipher, $key, $iv) ? openssl_decrypt($wifi[$ssid]['USERNAME'], $cipher, $key, 0, $iv) : _var($wifi[$ssid],'USERNAME');
@@ -186,7 +200,7 @@ case 'join':
   echo "<input type=\"hidden\" name=\"#file\" value=\"$cfg\">";
   echo "<input type=\"hidden\" name=\"#include\" value=\"/webGui/include/update.wireless.php\">";
   echo "<input type=\"hidden\" name=\"#command\" value=\"/webGui/scripts/wireless\">";
-  echo "<input type=\"hidden\" name=\"#section\" value=\"$ssid\">";
+  echo "<input type=\"hidden\" name=\"#section\" value=\"$section\">";
   echo "<input type=\"hidden\" name=\"ATTR1\" value=\"$attr1\">";
   echo "<input type=\"hidden\" name=\"ATTR2\" value=\"$attr2\">";
   echo "<input type=\"hidden\" name=\"ATTR3\" value=\"$attr3\">";
@@ -195,7 +209,8 @@ case 'join':
   echo "<table class=\"swal\">";
   echo "<tr><td colspan=\"2\">&nbsp;</td></tr>";
   if ($drop && isset($wifi[$ssid])) {
-    echo "<tr><td colspan=\"2\"><center><input type=\"button\" class=\"form\" value=\""._('Forget this network')."\" onclick=\"manage_wifi(encodeURIComponent('$ssid'),2)\"></center></td></tr>";
+    $encoded = rawurlencode($ssid);
+    echo "<tr><td colspan=\"2\"><center><input type=\"button\" class=\"form\" value=\""._('Forget this network')."\" onclick=\"manage_wifi('$encoded',2)\"></center></td></tr>";
     echo "<tr><td colspan=\"2\">&nbsp;</td></tr>";
   }
   if ($manual || $safe) {
@@ -244,8 +259,11 @@ case 'join':
   echo "</form>";
   break;
 case 'forget':
-  $ssid = escapeSSID(rawurldecode($_POST['ssid']));
-  if ($wifi[$ssid]['GROUP'] == 'active') exec("/etc/rc.d/rc.wireless stop &>/dev/null &");
+  $ssid = rawurldecode($_POST['ssid']);
+  // Older forms may refer to a saved name with escaped quotes.
+  if (!isset($wifi[$ssid])) $ssid = escapeSSID($ssid);
+  if (!isset($wifi[$ssid])) break;
+  if (($wifi[$ssid]['GROUP'] ?? '') == 'active') exec("/etc/rc.d/rc.wireless stop &>/dev/null &");
   unset($wifi[$ssid]);
   saveWifi();
   break;

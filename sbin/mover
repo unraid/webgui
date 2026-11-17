@@ -40,7 +40,7 @@ DEBUGGING=""
 MOVE_HELPER="${MOVE_HELPER:-/usr/libexec/unraid/move}"
 MOVERSTATUS="/usr/local/emhttp/state/mover.ini"
 GLOBAL_SHARECFG="/boot/config/share.cfg"
-MOVER_PROGRESS="disabled"
+MOVER_PROGRESS="no"
 TOTAL=0
 REMAIN=0
 SHARE_TOTAL=0
@@ -52,7 +52,7 @@ declare -A SHARE_TOTALS SHARE_REMAINS SHARE_START_TIME COUNTED_PATHS
 declare -A HARDLINK_PATH_GROUP HARDLINK_GROUP_PATHS HARDLINK_GROUP_COUNTS HARDLINK_GROUP_PROCESSED HARDLINK_PATH_SKIPPED HARDLINK_GROUP_LINK_COUNTS HARDLINK_GROUP_SKIPPED
 
 mover_progress_enabled() {
-  [[ $MOVER_PROGRESS == "enabled" ]]
+  [[ "$MOVER_PROGRESS" == "yes" ]]
 }
 
 inivalue() {
@@ -500,7 +500,7 @@ start() {
   acquire_pidfile
   echo "mover: started" >&2
   MOVER_PROGRESS=$(grep '^shareMoverProgress=' "$GLOBAL_SHARECFG" 2>/dev/null | cut -d'"' -f2)
-  MOVER_PROGRESS=${MOVER_PROGRESS:-disabled}
+  MOVER_PROGRESS=${MOVER_PROGRESS:-no}
   rm -f -- "$MOVERSTATUS"
 
   shopt -s nullglob

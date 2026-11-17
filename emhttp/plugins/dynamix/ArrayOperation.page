@@ -512,6 +512,7 @@ arraymonitor.on('message', function(state) {
   if (state == 1 && !timers.arraymonitor) timers.arraymonitor = setTimeout(refresh,1250);
 });
 
+<?if (_var($var,'shareMoverProgress','no') === 'yes'):?>
 var moverStatus = new NchanSubscriber('/sub/mover',{subscriber:'websocket'});
 moverStatus.on('message', function(moverdata) {
   var moverlines = 0;
@@ -545,6 +546,7 @@ moverStatus.on('error', hideMoverRows);
 moverStatus.on('disconnect', hideMoverRows);
 
 moverStatus.start();
+<?endif;?>
 
 var devices = new NchanSubscriber('/sub/devices<?=$spot?",parity":""?>',{subscriber:'websocket', reconnectTimeout:5000});
 devices.on('message', function(msg, meta) {
