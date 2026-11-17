@@ -38,7 +38,7 @@ function plugin_trusted_key($plugin) {
 	return !is_link($key) && is_file($key) && realpath(dirname($key)) === $root ? $key : false;
 }
 
-function download_url($url, $path = "") {
+function download_url($url) {
 	if (!plugin_remote_url_allowed($url)) return false;
 	$ch = curl_init();
 	curl_setopt_array($ch,[
@@ -48,23 +48,21 @@ function download_url($url, $path = "") {
 		CURLOPT_CONNECTTIMEOUT => 15,
 		CURLOPT_TIMEOUT => 45,
 		CURLOPT_ENCODING => "",
-		CURLOPT_RETURNTRANSFER => true,
 		CURLOPT_FOLLOWLOCATION => false,
 		CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
 		CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
 		CURLOPT_FAILONERROR => true
 	]);
 	$out = curl_exec($ch);
+	$status = curl_getinfo($ch,CURLINFO_RESPONSE_CODE);
 	curl_close($ch);
-	if ($out === false) return false;
-	if ($path && file_put_contents($path,$out,LOCK_EX) === false) return false;
-	return $out;
+	return $status >= 200 && $status < 300 ? $out : false;
 }
 
 function download_signed_manifest($url,$plugin,$path) {
 	$key = plugin_trusted_key($plugin);
 	if (!$key || !plugin_remote_url_allowed($url)) return false;
-	$manifest = download_url($url,$path);
+	$manifest = download_url($url);
 	$signature = download_url($url.'.sig');
 	if ($manifest === false || $signature === false) return false;
 	$trimmed = trim($signature);
@@ -73,7 +71,8 @@ function download_signed_manifest($url,$plugin,$path) {
 		if ($decoded !== false) $signature = $decoded;
 	}
 	$public = @openssl_pkey_get_public(@file_get_contents($key));
-	return $public && openssl_verify($manifest,$signature,$public,OPENSSL_ALGO_SHA256) === 1;
+	return $public && openssl_verify($manifest,$signature,$public,OPENSSL_ALGO_SHA256) === 1
+		&& file_put_contents_atomic($path,$manifest) !== false;
 }
 
 switch ($_POST['action']) {
@@ -91,7 +90,6 @@ switch ($_POST['action']) {
 		@unlink("/tmp/plugins/$plugin");
 		$url = plugin("pluginURL","/boot/config/plugins/$plugin");
 		if (!$url || !download_signed_manifest($url,$plugin,"/tmp/plugins/$plugin")) {
-			@unlink("/tmp/plugins/$plugin");
 			echo json_encode(["updateAvailable"=>false]);
 			break;
 		}

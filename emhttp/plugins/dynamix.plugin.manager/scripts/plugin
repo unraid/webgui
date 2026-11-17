@@ -162,25 +162,6 @@ Here is the set of directories and files used by the plugin system:
 
 EOF;
 
-// Error code to description (wget)
-// ref: https://www.gnu.org/software/wget/manual/html_node/Exit-Status.html
-//
-function error_desc($code) {
-  switch($code) {
-    case 0: return 'No errors';
-    case -1: return 'Generic error';
-    case 1: return 'Generic error';
-    case 2: return 'Parse error';
-    case 3: return 'File I/O error';
-    case 4: return 'Network failure';
-    case 5: return 'SSL verification failure - Check the date and time of your server in Settings - Date And Time';
-    case 6: return 'Username/password authentication failure';
-    case 7: return 'Protocol errors';
-    case 8: return 'Invalid URL / Server error response';
-    default: return 'Error code '.$code;
-  }
-}
-
 // Signal DONE to caller
 //
 function done($code) {
@@ -299,43 +280,71 @@ function download_signed_manifest($url,$name,$plugin,&$error,$write=true) {
     $error = 'no trusted publisher key for plugin manifest';
     return false;
   }
+  $directory = dirname($name);
+  if (!is_dir($directory) && !@mkdir($directory,0755,true) && !is_dir($directory)) {
+    $error = 'manifest destination directory is unavailable';
+    return false;
+  }
+  $manifest = tempnam($directory,'plugin-manifest-');
+  if ($manifest === false || dirname($manifest) !== realpath($directory)) {
+    if ($manifest !== false) @unlink($manifest);
+    $error = 'unable to create manifest temporary file';
+    return false;
+  }
   $signature = tempnam('/tmp','plugin-signature-');
   if ($signature === false) {
+    @unlink($manifest);
     $error = 'unable to create manifest signature temporary file';
     return false;
   }
-  $ok = download($url,$name,$error,$write)
-    && download($url.'.sig',$signature,$error,false)
-    && verify_manifest_signature($name,$signature,$key,$error);
-  @unlink($signature);
-  if (!$ok) @unlink($name);
-  return $ok;
+  try {
+    if (!download($url,$manifest,$error,$write,false)
+      || !download($url.'.sig',$signature,$error,false,false)
+      || !verify_manifest_signature($manifest,$signature,$key,$error)) return false;
+    if (!rename($manifest,$name)) {
+      $error = 'unable to publish verified manifest';
+      return false;
+    }
+    return true;
+  } finally {
+    @unlink($signature);
+    @unlink($manifest);
+  }
 }
 
 // Download a file from a URL.
 // Returns TRUE if success else FALSE and fills in error.
 //
-function download($url, $name, &$error, $write=true) {
+function download($url, $name, &$error, $write=true, $followRedirects=true) {
   $url = trim((string)$url);
   if ($url && remote_url_allowed($url)) {
     $plg = basename($url);
     $plg = str_replace('"', '', $plg);
-    $tries = (strpos($url, '.cdn') !== false) ? "1" : "3";
-    $command = "wget --compression=auto --no-cache --progress=dot --retry-connrefused --prefer-family=IPv4 --max-redirect=0 --timeout=10 --tries=$tries --waitretry=$tries -O ".escapeshellarg($name)." ".escapeshellarg($url)." 2>&1";
-    if ($file = popen($command, 'r')) {
+    $retries = strpos($url, '.cdn') !== false ? '0' : '2';
+    $command = ['curl', '-q', '--fail', '--show-error', '--progress-bar', '--globoff',
+      '--compressed', '--header', 'Cache-Control: no-cache', '--retry', $retries,
+      '--retry-connrefused', '--ipv4', '--connect-timeout', '10', '--speed-limit', '1', '--speed-time', '10',
+      '--location', '--max-redirs', $followRedirects ? '5' : '0', '--proto', '=https', '--proto-redir', '=https',
+      '--write-out', "\rHTTP %{http_code}\r", '--output', $name, '--url', $url];
+    $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['redirect', 1]], $pipes);
+    if (is_resource($process)) {
       if ($write) write("plugin: downloading: $plg ...\r");
       $level = -1;
-        while (($line = fgets($file)) !== false) {
-            if (preg_match('/ \d+% /', $line, $matches)) {
-                $percentage = substr(trim($matches[0]),0,-1);
+      $status = 0;
+      while (($line = stream_get_line($pipes[1],4096,"\r")) !== false) {
+        if (preg_match('/^HTTP (\d{3})$/',trim($line),$matches)) {
+          $status = (int)$matches[1];
+        } elseif ($write && preg_match('/(\d+(?:\.\d+)?)%\s*$/',$line,$matches)) {
+          $percentage = (int)$matches[1];
           if ($percentage > $level) {
-            if ($write) write("plugin: downloading: $plg ... $percentage%\r");
+            write("plugin: downloading: $plg ... $percentage%\r");
             $level = $percentage;
           }
         }
       }
-      if (($perror = pclose($file)) != 0) {
-        $error = "$plg download failure: ".error_desc($perror);
+      fclose($pipes[1]);
+      if (proc_close($process) !== 0 || $status < 200 || $status >= 300) {
+        $error = "$plg download failure".($status ? " (HTTP $status)" : '');
         return false;
       }
       clearstatcache(true, $name);
