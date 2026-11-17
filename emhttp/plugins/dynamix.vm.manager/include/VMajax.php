@@ -101,7 +101,7 @@ $action        = unscript(_var($request,'action'));
 $uuid          = unscript(_var($request,'uuid'));
 $arrResponse   = [];
 
-function vm_storage_path_allowed($path) {
+function vm_storage_path_allowed($path, bool $allowNamedPools = false) {
 	$path = (string)$path;
 	$normalized = preg_replace('#/+#','/', $path);
 	if ($normalized === false
@@ -111,9 +111,18 @@ function vm_storage_path_allowed($path) {
 		|| str_contains($normalized,'/../')
 		|| str_ends_with($normalized,'/..')) return false;
 
-	if (!preg_match('#\\A(/mnt/(?:user|cache|disk[0-9]+))(?:/|$)#',$normalized,$matches)) return false;
+	if (!preg_match('#\A(/mnt/([^/]+))(?:/|$)#',$normalized,$matches)) return false;
+	$storage = $matches[2];
+	$isStandardRoot = preg_match('/\A(?:user|cache|disk[0-9]+)\z/',$storage);
+	if (!$isStandardRoot) {
+		if (!$allowNamedPools) return false;
+		global $docroot;
+		static $pools = null;
+		$pools ??= pools_filter(@parse_ini_file("$docroot/state/disks.ini",true) ?: []);
+		if (!in_array($storage,$pools,true)) return false;
+	}
 	$root = realpath($matches[1]);
-	if ($root === false) return false;
+	if ($root === false || (!$isStandardRoot && $root !== $matches[1])) return false;
 
 	// Resolve the existing portion of the path so symlinks cannot escape the allowed root.
 	// A missing final path is still valid, but a broken symlink is rejected fail-closed.
@@ -186,12 +195,13 @@ function vm_size_bytes($value) {
 }
 
 function vm_template_source_path($name) {
-	$name = (string)$name;
+	if (!is_string($name)) return false;
 	$base = basename($name);
-	if (!vm_storage_path_allowed($name) || !preg_match('/\\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json\\z/iD',$base)) return false;
+	if (strlen($base) <= 5 || !str_ends_with(strtolower($base),'.json') || preg_match('/[\x00-\x1f\x7f]/',$base)) return false;
+	if (!vm_storage_path_allowed($name,true)) return false;
 	$real = realpath($name);
 	return $real !== false && is_file($real) && !is_link($name)
-		&& vm_storage_path_allowed($real) && realpath(dirname($name)) === dirname($real) ? $real : false;
+		&& vm_storage_path_allowed($real,true) && realpath(dirname($name)) === dirname($real) ? $real : false;
 }
 
 $readOnlyActions = ['domain-state','file-info','generate-mac','get-vm-icons','get-usb-devices','snap-list','snap-images','get_storage_fstype','virtio-win-iso-info'];
