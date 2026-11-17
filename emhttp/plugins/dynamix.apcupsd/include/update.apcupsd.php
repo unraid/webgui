@@ -17,12 +17,12 @@ $new   = array_replace_recursive($_POST, $default);
 $cable = $new['UPSCABLE']=='custom' ? $new['CUSTOMUPSCABLE'] : $new['UPSCABLE'];
 
 function apcupsd_set($key, $value, $conf) {
-  // Keep the replacement a single sed command even when a submitted value
-  // contains line breaks, then quote the complete expression for the shell.
+  // Keep submitted values on a single configuration line.
   $value = preg_replace('/[\r\n]/', ' ', (string)$value);
   $value = str_replace('\\', '\\\\', $value);
   $expression = '/^'.preg_quote($key, '/').'/c\\'.$key.' '.$value;
-  exec('sed -i -e '.escapeshellarg($expression).' '.escapeshellarg($conf));
+  $process = proc_open(['sed', '-i', '-e', $expression, $conf], [], $pipes);
+  if (is_resource($process)) proc_close($process);
 }
 
 exec("/etc/rc.d/rc.apcupsd stop");
