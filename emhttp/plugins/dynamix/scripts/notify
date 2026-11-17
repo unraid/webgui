@@ -111,7 +111,8 @@ function clean_subject($subject) {
 function ini_encode_value($value) {
   if (is_int($value) || is_float($value)) return $value;
   if (is_bool($value)) return $value ? 'true' : 'false';
-  $value = (string)$value;
+  // The unread and archived formats store one field per physical line.
+  $value = str_replace(["\r\n", "\r", "\n"], ' ', (string)$value);
   return '"'.strtr($value, ["\\"=>"\\\\", '"' => '\\"']).'"';
 }
 
