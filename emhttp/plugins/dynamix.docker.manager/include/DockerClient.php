@@ -447,10 +447,6 @@ class DockerTemplates {
 		if (!$imgUrl) $imgUrl = $tmpIconUrl;
 		if (!$imgUrl || trim($imgUrl) == "/plugins/dynamix.docker.manager/images/question.png") return '';
 		$imgUrl = trim($imgUrl);
-		if (!$this->isSupportedIconUrl($imgUrl)) {
-			my_logger("$contName: Unsupported icon URL");
-			return '';
-		}
 
 		$iconRAM = sprintf('%s/%s-%s.png', $dockerManPaths['images-ram'], $contName, 'icon');
 		$icon    = sprintf('%s/%s-%s.png', $dockerManPaths['images'], $contName, 'icon');
@@ -459,7 +455,13 @@ class DockerTemplates {
 		if (!is_dir(dirname($icon))) mkdir(dirname($icon), 0755, true);
 
 		if (!is_file($iconRAM)) {
-			if (!is_file($icon)) $this->download_url($imgUrl, $icon);
+			if (!is_file($icon)) {
+				if (!$this->isSupportedIconUrl($imgUrl)) {
+					my_logger("$contName: Unsupported icon URL");
+					return '';
+				}
+				$this->download_url($imgUrl, $icon);
+			}
 			@copy($icon, $iconRAM);
 		}
 		if (!is_file($icon) && is_file($iconRAM)) {
