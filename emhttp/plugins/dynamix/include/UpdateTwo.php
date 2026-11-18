@@ -162,7 +162,7 @@ case 'ct':
 
 	/* force kill container if still running after time-out */
 	$DockerClient->removeContainer($ct);
-	execCommand($cmd, false);
+	execCommand($cmd, false, $ct);
 	$DockerClient->flushCaches();
 	$newImageID = $DockerClient->getImageID($repository);
 

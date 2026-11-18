@@ -30,7 +30,7 @@ $xml    = file_get_contents($tmpl);
 $old = $DockerClient->getImageID($repository);
 
 removeContainer($name,false,false);
-execCommand(str_replace('/docker create ','/docker run -d ',$cmd),false);
+execCommand(str_replace('/docker create ','/docker run -d ',$cmd),false,$name);
 if (!in_array($name,$start)) stopContainer($name,false,false);
 $DockerClient->flushCaches();
 $new = $DockerClient->getImageID($repository);
