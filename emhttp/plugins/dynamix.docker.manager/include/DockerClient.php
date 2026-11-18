@@ -1062,6 +1062,7 @@ class DockerClient {
 			$c['Id']          = $this->extractID($ct['Id']);
 			$c['Volumes']     = $info['HostConfig']['Binds'];
 			$c['Created']     = $this->humanTiming($ct['Created']);
+			$c['CreatedAt']   = (int)$ct['Created'];
 			$c['NetworkMode'] = $ct['HostConfig']['NetworkMode'];
 			$c['Manager'] 	  = $info['Config']['Labels']['net.unraid.docker.managed'] ?? false;
 			if ($c['Manager'] == 'composeman') {
@@ -1230,6 +1231,121 @@ class DockerUtil {
 	public static function saveJSON($path, $content) {
 		if (!is_dir(dirname($path))) mkdir(dirname($path), 0755, true);
 		return file_put_contents($path, json_encode($content, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+	}
+
+	// Path of the order file ('user-prefs') or the autostart file ('autostart-file').
+	// The fallback covers callers that included this file inside a function, where $dockerManPaths is not global.
+	private static function orderFile(string $key): string {
+		global $dockerManPaths;
+		return $dockerManPaths[$key] ?? ($key=='user-prefs' ? '/boot/config/plugins/dockerMan/userprefs.cfg' : '/var/lib/docker/unraid-autostart');
+	}
+
+	// The user's container order: the names stored in userprefs.cfg, in file order.
+	// No file means no manual order has been set: containers are listed by name.
+	// Names that are not containers (removed ones, entries of plugins) are kept and ignored.
+	public static function userOrder(): array {
+		$file = static::orderFile('user-prefs');
+		if (!is_file($file)) return [];
+		return array_values(array_filter(array_map('strval', (array)@parse_ini_file($file)), 'strlen'));
+	}
+
+	// Change the stored order under an exclusive lock, so a drag and the registration of a new
+	// container cannot overwrite each other. $update gets the current order (null without a file)
+	// and returns the new one: an array to save (positions numbered from 0), false to remove the
+	// file (Reset sorting), null to leave it as it is.
+	private static function updateUserOrder(callable $update): void {
+		$file = static::orderFile('user-prefs');
+		$lock = @fopen('/var/lock/docker-userprefs.lock', 'c');
+		if ($lock) flock($lock, LOCK_EX);
+		$old = is_file($file) ? static::userOrder() : null;
+		$new = $update($old);
+		if ($new === false) {
+			@unlink($file);
+		} elseif (is_array($new) && $new !== $old) {
+			$save = [];
+			foreach (array_values(array_unique($new)) as $i => $name) $save[] = "$i=\"$name\"";
+			if (!is_dir(dirname($file))) @mkdir(dirname($file), 0770, true);
+			file_put_contents_atomic($file, implode("\n", $save)."\n");
+		}
+		if ($lock) {flock($lock, LOCK_UN); fclose($lock);}
+	}
+
+	// Save the order the user set by dragging on the Docker tab.
+	public static function saveUserOrder(array $names): void {
+		static::updateUserOrder(function() use ($names) {return array_values(array_filter($names, 'strlen'));});
+	}
+
+	// Reset sorting: without the file, containers are listed by name.
+	public static function resetUserOrder(): void {
+		static::updateUserOrder(function() {return false;});
+	}
+
+	// The one order used wherever containers are listed, started or stopped.
+	// $names: all existing container names, sorted by name. Returns them in the user's order.
+	// $created: optional map of name => Docker creation time (Unix seconds).
+	// With a manual order (userprefs.cfg exists), containers the file does not list yet are appended to it,
+	// so every container has a stored position from the first time it is seen.
+	// New containers go last, oldest first: a container that needs another one (an app and its database)
+	// can only be set up after it, so the one it needs is already in the list, or is older, and starts
+	// before it. Listing new containers first would start an app before the database it was set up with.
+	public static function containerOrder(array $names, array $created=[]): array {
+		if (!is_file(static::orderFile('user-prefs'))) return $names;
+		if (array_diff($names, static::userOrder())) {
+			$added = [];
+			static::updateUserOrder(function($order) use ($names, $created, &$added) {
+				if ($order === null) return null;
+				$added = array_values(array_diff($names, $order)); // in name order
+				// oldest first; usort is stable, so containers created in the same second keep name order
+				usort($added, function($a, $b) use ($created) {return ($created[$a] ?? PHP_INT_MAX) <=> ($created[$b] ?? PHP_INT_MAX);});
+				return array_merge($order, $added);
+			});
+			if ($added) static::startLast($added);
+		}
+		return sort_by_order($names, static::userOrder());
+	}
+
+	// Containers that just got their position at the end of the list also start last.
+	// Only their lines move; the order of all other lines of the autostart file is left as it is.
+	private static function startLast(array $names): void {
+		$file = static::orderFile('autostart-file');
+		$old = array_values(array_filter((array)@file($file, FILE_IGNORE_NEW_LINES), 'strlen'));
+		$moved = array_values(array_filter($old, function($line) use ($names) {return in_array(var_split($line), $names, true);}));
+		if (!$moved) return;
+		$new = array_merge(array_values(array_diff($old, $moved)), sort_by_order($moved, $names, 'var_split'));
+		if ($new !== $old) file_put_contents_atomic($file, implode("
+", $new)."
+");
+	}
+
+	// Sort container rows (arrays with a 'Name', as returned by getDockerContainers) in the user's order.
+	public static function sortContainers(array $containers): array {
+		$order = static::containerOrder(array_column($containers, 'Name'), array_column($containers, 'CreatedAt', 'Name'));
+		return sort_by_order($containers, $order, function($ct) {return $ct['Name'];});
+	}
+
+	// Sort the lines of the autostart file ("name [wait]") in the user's order, by name without a manual order.
+	public static function sortAutostart(array $autostart): array {
+		$autostart = array_values(array_filter($autostart, 'strlen'));
+		if (!is_file(static::orderFile('user-prefs'))) {natcasesort($autostart); return array_values($autostart);}
+		return sort_by_order($autostart, static::userOrder(), 'var_split');
+	}
+
+	// A container was renamed: the new name takes over the position and the autostart setting of the old one.
+	public static function renameInUserOrder(string $old, string $new): void {
+		if ($old === $new || $old === '' || $new === '') return;
+		$file = static::orderFile('autostart-file');
+		$autostart = (array)@file($file, FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
+		$names = array_map('var_split', $autostart);
+		if (($key = array_search($old, $names, true)) !== false && !in_array($new, $names, true)) {
+			$autostart[$key] = rtrim("$new ".var_split($autostart[$key], 1));
+			file_put_contents_atomic($file, implode("\n", $autostart)."\n");
+		}
+		static::updateUserOrder(function($order) use ($old, $new) {
+			if ($order === null || !in_array($old, $order, true)) return null;
+			$order = array_values(array_diff($order, [$new]));
+			$order[array_search($old, $order, true)] = $new;
+			return $order;
+		});
 	}
 
 	public static function docker($cmd, $a=false) {

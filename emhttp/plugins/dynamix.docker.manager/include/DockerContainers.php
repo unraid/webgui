@@ -32,13 +32,7 @@ if (!$containers && !$images) {
   return;
 }
 
-if (file_exists($user_prefs)) {
-  $prefs = (array)@parse_ini_file($user_prefs);
-  $sort = [];
-  foreach ($containers as $ct) $sort[] = array_search($ct['Name'],$prefs);
-  array_multisort($sort,SORT_NUMERIC,$containers);
-  unset($sort);
-}
+$containers = DockerUtil::sortContainers($containers);
 
 // get host interface IP address
 $host = DockerUtil::host();

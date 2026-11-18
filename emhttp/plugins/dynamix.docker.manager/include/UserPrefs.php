@@ -19,26 +19,19 @@ $autostart_file = $dockerManPaths['autostart-file'];
 $user_prefs = $dockerManPaths['user-prefs'];
 
 if (isset($_POST['reset'])) {
-  @unlink($user_prefs);
+  DockerUtil::resetUserOrder();
   if (file_exists($autostart_file)) {
     $allAutoStart = file($autostart_file, FILE_IGNORE_NEW_LINES);
     natcasesort($allAutoStart);
     file_put_contents($autostart_file, implode(PHP_EOL, $allAutoStart).PHP_EOL);
   }
 } else {
-  $names = explode(';',$_POST['names']);
-  $index = explode(';',$_POST['index']);
-  $save  = []; $i = 0;
-
-  foreach ($names as $name) if ($name) $save[] = $index[$i++]."=\"".$name."\""; else $i++;
-  file_put_contents($user_prefs, implode("\n",$save)."\n");
+  // the names arrive in the order of the rows on the Docker tab
+  DockerUtil::saveUserOrder(explode(';',$_POST['names']));
 
   // sort containers for start-up
   if (file_exists($autostart_file)) {
-    $prefs = parse_ini_file($user_prefs); $sort = [];
-    $allAutoStart = file($autostart_file, FILE_IGNORE_NEW_LINES);
-    foreach ($allAutoStart as $ct) $sort[] = array_search(explode(' ',$ct)[0],$prefs) ?? 999;
-    array_multisort($sort,SORT_NUMERIC,$allAutoStart);
+    $allAutoStart = DockerUtil::sortAutostart(file($autostart_file, FILE_IGNORE_NEW_LINES));
     file_put_contents($autostart_file, implode(PHP_EOL, $allAutoStart).PHP_EOL);
   }
 }

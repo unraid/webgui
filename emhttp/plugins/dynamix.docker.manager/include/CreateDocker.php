@@ -203,6 +203,8 @@ if (isset($_POST['contName'])) {
     }
     // force kill container if still running after 10 seconds
     removeContainer($existing,1);
+    // the renamed container keeps its position on the Docker tab and its autostart setting
+    DockerUtil::renameInUserOrder($existing, $Name);
     // remove old template
     $oldFilename = $sourceUserTemplate ? $sourceTemplate : $DockerTemplates->getUserTemplatePath($existing);
     if (strtolower($filename) != strtolower($oldFilename)) {
