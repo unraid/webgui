@@ -804,10 +804,23 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                     <?
                     $label = $value = [];
                     $i = 0;
+                    // optional custom fan names, keyed by "<chip> - <fanN>" (matches `sensors -uA` order)
+                    $fan_names_file = '/boot/config/plugins/dynamix/fan_names.json';
+                    $fan_names = file_exists($fan_names_file) ? (json_decode(file_get_contents($fan_names_file), true) ?: []) : [];
+                    $fan_keys = [];
+                    $fan_chip = '';
+                    foreach (explode("\n", shell_exec("sensors -uA 2>/dev/null") ?: '') as $fan_line) {
+                        if (strpos($fan_line, ':') === false && trim($fan_line) !== '') {
+                            $fan_chip = trim($fan_line);
+                        } elseif (preg_match('/^\s*(fan\d+)_input:/', $fan_line, $fan_m)) {
+                            $fan_keys[] = "$fan_chip - {$fan_m[1]}";
+                        }
+                    }
                     for ($fan=0; $fan<$fans; $fan++) {
                         if ($fan > 0 && $fan % 3 == 0) $i++;
                         $class = $fan % 3 == 2 ? "" : " class='fan'";
-                        $label[$i][] = "<span{$class}>"._('FAN')." ".($fan+1)."</span>";
+                        $fan_label = (($fan_names[$fan_keys[$fan] ?? ''] ?? '') !== '') ? htmlspecialchars($fan_names[$fan_keys[$fan]]) : _('FAN')." ".($fan+1);
+                        $label[$i][] = "<span{$class}>$fan_label</span>";
                     }
                     $i = 0;
                     for ($fan=0; $fan<$fans; $fan++) {
