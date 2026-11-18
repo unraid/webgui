@@ -13,14 +13,15 @@
 ?>
 <?
 $docroot  = '/usr/local/emhttp';
-$varroot  = '/var/local/emhttp';
-$pool_log = '/var/tmp/pool_log.tmp';
-$smartALL = '/boot/config/smart-all.cfg';
-$smartONE = '/boot/config/smart-one.cfg';
 $md5_old  = $fs_old = -1;
 
 require_once "$docroot/webGui/include/Helpers.php";
 require_once "$docroot/webGui/include/publish.php";
+$ctx      = array_context((int)preg_replace('/^\D*/','',basename($argv[0])));
+$varroot  = $ctx['state'];
+$pool_log = "{$ctx['tmp']}/pool_log.tmp";
+$smartALL = "{$ctx['config']}/smart-all.cfg";
+$smartONE = "{$ctx['config']}/smart-one.cfg";
 extract(parse_plugin_cfg('dynamix',true));
 
 // add translations
@@ -627,9 +628,9 @@ function device_desc(&$disk, $poolName='', $poolstatusData=[]) {
 }
 
 function assignment(&$disk) {
-  global $var, $devs;
+  global $var, $devs, $ctx;
   $echo = [];
-  $echo[] = "<form method='POST' action='/update.htm' target='progressFrame'>";
+  $echo[] = "<form method='POST' action='{$ctx['update']}' target='progressFrame'>";
   $echo[] = "<input type='hidden' name='changeDevice' value='apply'>";
   $echo[] = "<input type='hidden' name='csrf_token' value='"._var($var,'csrf_token')."'>";
   $echo[] = "<select class='slot' name='slotId."._var($disk,'idx')."' onChange='devices.start();this.form.submit()'>";
@@ -923,11 +924,11 @@ function show_totals($text,$array,$name) {
 }
 
 function array_slots() {
-  global $var;
+  global $var, $ctx;
   $min  = max(_var($var,'sbNumDisks',0),3);
   $max  = _var($var,'MAX_ARRAYSZ');
   $echo = [];
-  $echo[] = "<form method='POST' action='/update.htm' target='progressFrame'>";
+  $echo[] = "<form method='POST' action='{$ctx['update']}' target='progressFrame'>";
   $echo[] = "<input type='hidden' name='csrf_token' value='"._var($var,'csrf_token')."'>";
   $echo[] = "<input type='hidden' name='changeSlots' value='apply'>";
   $echo[] = "<select class='slots-amount' name='SYS_ARRAY_SLOTS' onChange='devices.start();this.form.submit()'>";
@@ -942,7 +943,7 @@ function array_slots() {
 }
 
 function cache_slots($off,$pool,$min,$slots,$isBootPool=false) {
-  global $var, $disks;
+  global $var, $disks, $ctx;
   $off  = $off && $min ? ' disabled' : '';
   $fsType = _var($disks[$pool],'fsType','auto');
   $max  = ($fsType=='auto' || str_contains($fsType,'btrfs') || str_contains($fsType,'zfs')) ? _var($var,'MAX_CACHESZ') : 1;
@@ -951,7 +952,7 @@ function cache_slots($off,$pool,$min,$slots,$isBootPool=false) {
     $min = min($min,$max);
   }
   $echo = [];
-  $echo[] = "<form method='POST' action='/update.htm' target='progressFrame'>";
+  $echo[] = "<form method='POST' action='{$ctx['update']}' target='progressFrame'>";
   $echo[] = "<input type='hidden' name='csrf_token' value='"._var($var,'csrf_token')."'>";
   $echo[] = "<input type='hidden' name='changeSlots' value='apply'>";
   $echo[] = "<input type='hidden' name='poolName' value='$pool'>";
@@ -989,6 +990,8 @@ while (true) {
   $disks  = (array)@parse_ini_file("$varroot/disks.ini",true);
   $sec    = (array)@parse_ini_file("$varroot/sec.ini",true);
   $diskio = (array)@parse_ini_file("$varroot/diskload.ini");
+  // forms post to this webGui, so an additional array uses its token
+  if ($ctx['id'] > 1) $var['csrf_token'] = ((array)@parse_ini_file('/var/local/emhttp/var.ini'))['csrf_token'] ?? '';
   // check for language changes
   extract(parse_plugin_cfg('dynamix',true));
   if (_var($display,'locale') != $locale_init) {
@@ -1526,12 +1529,12 @@ while (true) {
   $echo['stop'] = _var($var,'fsState')=='Stopped' ? 1 : 0;
 
   // publish without a timeout for no listeners
-  publish('devices',json_encode($echo));
+  publish('devices'.$ctx['suffix'],json_encode($echo));
   $fs_new = _var($var,'fsState')=='Started' ? 1 : 0;
-  publish('arraymonitor',$fs_new);
+  publish('arraymonitor'.$ctx['suffix'],$fs_new);
 
   // ping the page so we can terminate if nobody is listening
-  ping('mainPingListener');
+  ping('mainPingListener'.$ctx['suffix']);
   sleep(1);
 }
 ?>

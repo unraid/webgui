@@ -14,6 +14,7 @@
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Secure.php";
 require_once "$docroot/webGui/include/Wrappers.php";
+require_once "$docroot/webGui/include/Helpers.php";
 
 switch ($_POST['cmd']??'') {
 case 'config':
@@ -49,7 +50,9 @@ case 'notice':
   break;
 case 'state':
   $pools = explode(',',_var($_POST,'pools'));
-  $disks = (array)@parse_ini_file('state/disks.ini',true);
+  /* the pool states of the array being started: array 1 reads the host state as before */
+  $ctx   = array_context(_var($_POST,'array',1));
+  $disks = (array)@parse_ini_file($ctx['id'] > 1 ? "{$ctx['state']}/disks.ini" : 'state/disks.ini',true);
   $error = [];
   foreach ($pools as $pool) if (stripos(_var($disks[$pool],'state'),'ERROR:')===0) $error[] = $pool.' - '.str_ireplace('ERROR:','',$disks[$pool]['state']);
   echo implode('<br>',$error);

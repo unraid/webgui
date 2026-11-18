@@ -265,8 +265,7 @@ function tail($file, $rows=1) {
 }
 
 /* Get the last parity check from the parity history. */
-function last_parity_log() {
-  $log = '/boot/config/parity-checks.log';
+function last_parity_log($log='/boot/config/parity-checks.log') {
   if (file_exists($log)) {
     [$date, $duration, $speed, $status, $error, $action, $size] = my_explode('|', tail($log), 7);
   } else {
@@ -281,11 +280,11 @@ function last_parity_log() {
 
 
 /* Get the last parity check from Unraid. */
-function last_parity_check() {
+function last_parity_check($tmp='/var/tmp') {
   global $var;
   /* Files for the latest parity check. */
-  $stamps = '/var/tmp/stamps.ini';
-  $resync = '/var/tmp/resync.ini';
+  $stamps = "$tmp/stamps.ini";
+  $resync = "$tmp/resync.ini";
   /* Get the latest parity information from Unraid. */
   $synced   = file_exists($stamps) ? explode(',',file_get_contents($stamps)) : [];
   $sbSynced = array_shift($synced) ?: _var($var,'sbSynced',0);
@@ -303,6 +302,38 @@ function last_parity_check() {
   $speed    = $status==0 ? round($size*1024/$duration) : 0;
   $error    = _var($var,'sbSyncErrs',0);
   return [$duration, $speed, $status, $error, $action, $size];
+}
+
+/* Array context: where the Main array sections read their state and send their commands.
+ * Array 1 is the array as it has always been, and gets exactly the long-standing paths and names.
+ * An additional array N gets per-array paths and an "N" suffix on its nchan channels; any of these
+ * can be set in /var/local/emhttp/arrayN.ini, and its command endpoints must be set there.
+ * A page selects its array with an ArrayId="N" header, an nchan script by the number at the
+ * end of its own name (e.g. device_list2 as a link to device_list). */
+function array_context($id=1) {
+  $ctx = ['id'=>1, 'state'=>'/var/local/emhttp', 'tmp'=>'/var/tmp', 'config'=>'/boot/config', 'suffix'=>'',
+          'update'=>'/update.htm', 'parity'=>'/webGui/include/ParityControl.php', 'toggle'=>'/webGui/include/ToggleState.php'];
+  $id = (int)$id;
+  if ($id <= 1) return $ctx;
+  $own = ['id'=>$id, 'state'=>"/var/local/emhttp/array$id", 'tmp'=>"/var/tmp/array$id", 'config'=>"/boot/config/array$id", 'suffix'=>"$id",
+          'update'=>'', 'parity'=>'', 'toggle'=>''];
+  $ini = (array)@parse_ini_file("/var/local/emhttp/array$id.ini");
+  return array_merge($ctx, $own, array_intersect_key($ini, array_flip(['state','tmp','config','update','parity','toggle'])));
+}
+
+/* The emhttp state of the array in $ctx, under the names template.php uses for the host state.
+ * A page showing an additional array uses these in place of the host values while it renders. */
+function array_context_vars($ctx) {
+  $state = $ctx['state'];
+  $vars  = [];
+  foreach (['devs','disks','sec','sec_nfs','shares','users'] as $key) $vars[$key] = (array)@parse_ini_file("$state/$key.ini",true);
+  $vars['var'] = (array)@parse_ini_file("$state/var.ini");
+  $vars['pool_devices'] = $vars['bootpool_devices'] = false;
+  $vars['pools'] = pools_filter($vars['disks']);
+  foreach ($vars['pools'] as $pool) $vars['pool_devices'] |= _var($vars['disks'][$pool],'devices')!='';
+  $vars['bootpools'] = flash_filter($vars['disks']);
+  foreach ($vars['bootpools'] as $bootpool) $vars['bootpool_devices'] |= _var($vars['disks'][$bootpool],'devices')!='';
+  return $vars;
 }
 
 function urlencode_path($path) {
