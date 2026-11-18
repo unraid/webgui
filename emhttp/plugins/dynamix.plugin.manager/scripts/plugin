@@ -314,6 +314,21 @@ function filter_url($url) {
 // A FILE Method attribute can list multiple methods separated by spaces in which case that file
 // is processed for any of those methods.
 //
+function lock_boot_update($plugin_file) {
+  static $handle = null;
+  if (is_resource($handle)) return;
+  $error = '';
+  if (basename($plugin_file ?: '') !== 'unRAIDServer.plg' && (string)plugin('name', $plugin_file, $error) !== 'unRAIDServer') return;
+  $mask = umask(0077);
+  $handle = @fopen('/var/run/unraid-boot-update.lock', 'ce');
+  umask($mask);
+  if (!$handle || !flock($handle, LOCK_EX | LOCK_NB)) {
+    write("plugin: another OS update operation is running\n");
+    done(1);
+  }
+  // Retain ownership through FILE execution, registration and post-install hooks.
+}
+
 function plugin($method, $plugin_file, &$error) {
   global $logger, $download_only, $check_version, $boot, $nextboot;
   $methods = ['install', 'remove'];
@@ -691,6 +706,7 @@ if ($method == 'install') {
     write("plugin: $plugin is not a plg file\n");
     done(1);
   }
+  lock_boot_update($argv[2]);
   $action = 'installing';
   write("plugin: $action: $plugin\n");
   // check for URL
@@ -710,6 +726,7 @@ if ($method == 'install') {
   } else {
     $plugin_file = realpath($argv[2]);
   }
+  lock_boot_update($plugin_file);
   // bergware - check Unraid version dependency (if present)
   global $check_version;
   $min = plugin('min', $plugin_file, $error);
@@ -829,6 +846,7 @@ if ($method == 'install') {
 if ($method == 'check') {
   $plugin = $argv[2];
   $symlink = "$plugins/$plugin";
+  lock_boot_update($symlink);
   write("plugin: checking: $plugin ...\n");
   $installed_plugin_file = installed_plugin($symlink);
   if ($installed_plugin_file === false) {
@@ -877,6 +895,7 @@ if ($method == 'check') {
 //
 if ($method == 'update') {
   $plugin = $argv[2];
+  lock_boot_update("$tmp/$plugin");
   $symlink = "$plugins/$plugin";
   if ($download_only) {
     write("plugin: download-only mode enabled, skipping install commands\n");
@@ -950,6 +969,7 @@ if ($method == 'update') {
 if ($method == 'remove') {
   $plugin = $argv[2];
   $symlink = "$plugins/$plugin";
+  lock_boot_update($symlink);
   write("plugin: removing: $plugin\n");
   $installed_plugin_file = @readlink($symlink);
   if ($installed_plugin_file !== false) {
