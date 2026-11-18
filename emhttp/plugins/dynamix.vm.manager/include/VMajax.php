@@ -462,7 +462,9 @@ case 'snap-desc':
 
 case 'get_storage_fstype':
 	$fstype = get_storage_fstype(unscript(_var($_REQUEST,'storage')));
-	$arrResponse = ['fstype' => $fstype , 'success' => true] ;
+	$arrResponse = $fstype === false
+	? ['error' => 'Invalid storage']
+	: ['fstype' => $fstype , 'success' => true];
 	break;
 
 case 'vm-removal':

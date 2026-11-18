@@ -175,8 +175,10 @@ class Array2XML {
 	// Load emhttp variables if needed.
 	if (!isset($var)){
 		$var = @parse_ini_file("$docroot/state/var.ini");
-		$disks = @parse_ini_file("$docroot/state/disks.ini", true);
 		extract(parse_plugin_cfg("dynamix",true));
+	}
+	if (!isset($disks)) {
+		$disks = @parse_ini_file("$docroot/state/disks.ini", true);
 	}
 	$ethX = 'eth0';
 	if (!isset($$ethX) && is_file("$docroot/state/network.ini")) {
@@ -2993,11 +2995,50 @@ function get_vm_ip($dom) {
 	return $myIP;
 }
 
+function vm_manager_storage_path($storage="default") {
+	global $domain_cfg, $disks;
+
+	if ($storage === "default") {
+		$path = $domain_cfg['DOMAINDIR'] ?? '';
+	} else {
+		$storage = (string)$storage;
+		if ($storage === '' || $storage === '.' || $storage === '..' || strpbrk($storage, "/\\\0") !== false) return false;
+
+		$storagePools = function_exists('pools_filter') ? pools_filter((array)($disks ?? [])) : [];
+		$isArrayDisk = str_starts_with($storage, 'disk')
+			&& ($disks[$storage]['type'] ?? '') === 'Data'
+			&& !empty($disks[$storage]['device']);
+		if (!$isArrayDisk && !in_array($storage, $storagePools, true)) return false;
+		$path = "/mnt/$storage/";
+	}
+
+	return $path !== '' ? transpose_user_path($path) : false;
+}
+
+function vm_manager_filesystem_type($path) {
+	$process = proc_open(
+		['stat', '-f', '-c', '%T', $path],
+		[
+			0 => ['pipe', 'r'],
+			1 => ['pipe', 'w'],
+			2 => ['file', '/dev/null', 'w'],
+		],
+		$pipes
+	);
+	if (!is_resource($process)) return '';
+
+	fclose($pipes[0]);
+	$fstype = stream_get_contents($pipes[1]);
+	fclose($pipes[1]);
+	$status = proc_close($process);
+
+	return $status === 0 ? trim($fstype) : '';
+}
+
 function check_zfs_name($zfsname, $storage="default") {
-	global $lv,$domain_cfg;
-	if ($storage == "default") $storage = $domain_cfg['DOMAINDIR']; else $storage = "/mnt/$storage/";
-	$storage=transpose_user_path($storage);
-	$fstype = trim(shell_exec(" stat -f -c '%T' $storage"));
+	$storage = vm_manager_storage_path($storage);
+	if ($storage === false) return false;
+	$fstype = vm_manager_filesystem_type($storage);
 	#Check if ZFS.
 	$allowed_chars = "/^[A-Za-z0-9][A-Za-z0-9\-_.: ]*$/";
 	if ($fstype == "zfs" && !preg_match($allowed_chars, $zfsname)) {
@@ -3008,11 +3049,8 @@ function check_zfs_name($zfsname, $storage="default") {
 }
 
 function get_storage_fstype($storage="default") {
-	global $domain_cfg;
-	if ($storage == "default") $storage = $domain_cfg['DOMAINDIR']; else $storage = "/mnt/$storage/";
-	$storage=transpose_user_path($storage);
-	$fstype = trim(shell_exec(" stat -f -c '%T' $storage"));
-	return $fstype;
+	$storage = vm_manager_storage_path($storage);
+	return $storage === false ? false : vm_manager_filesystem_type($storage);
 }
 
 function getFilesystemAndReflinkMode(string $filePath): array {
