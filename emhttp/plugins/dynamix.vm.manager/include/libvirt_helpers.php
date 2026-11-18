@@ -1519,13 +1519,66 @@ class Array2XML {
 				}
 		}
 		// settings not in the GUI, but maybe customized
-		unset($old['clock']);
-		unset($old['devices']['input']);
-		// preserve vnc/spice port settings
-		// unset($new['devices']['graphics']['@attributes']['port'],$new['devices']['graphics']['@attributes']['autoport']);
-		unset($old['devices']['sound']);
-		unset($old['devices']['graphics']);
-		if (!isset($new['devices']['graphics']['@attributes']['keymap']) && isset($old['devices']['graphics']['@attributes']['keymap'])) unset($old['devices']['graphics']['@attributes']['keymap']);
+		// the form regenerates these sections, so the stored copy is dropped; what the form has no field for is copied into the new copy first
+		$list = function($x) { return (is_array($x) && !empty($x) && is_numeric(key($x))) ? array_values($x) : (empty($x) ? [] : [$x]); }; // one node = assoc array, several = list
+		// clock: the form owns the offset and the rtc/pit/hpet/hypervclock timers; keep other timers (tsc, kvmclock, ...) and clock attributes
+		if (isset($new['clock'])) {
+			$timers = $list($new['clock']['timer']);
+			$names = array_column(array_column($timers,'@attributes'),'name');
+			foreach ($list($old['clock']['timer']) as $t) {
+				$name = $t['@attributes']['name'] ?? '';
+				if ($name && !in_array($name, ['rtc','pit','hpet','hypervclock']) && !in_array($name, $names)) {$timers[] = $t; $names[] = $name;}
+			}
+			if ($timers) $new['clock']['timer'] = $timers;
+			foreach ($old['clock']['@attributes'] ?? [] as $a => $val) if (!isset($new['clock']['@attributes'][$a])) $new['clock']['@attributes'][$a] = $val;
+		}
+		// input: the form generates tablet usb + mouse/keyboard ps2 for a VNC/SPICE console and all evdev inputs; keep other stored inputs
+		$vmrc = ['vnc','spice'];
+		$oldvmrc = array_filter($list($old['devices']['graphics']), function($g) use ($vmrc) {return in_array($g['@attributes']['type'] ?? '', $vmrc);});
+		$inputs = $list($new['devices']['input']);
+		$keys = array_map(function($i) {return ($i['@attributes']['type'] ?? '').'/'.($i['@attributes']['bus'] ?? '');}, $inputs);
+		foreach ($list($old['devices']['input']) as $i) {
+			$key = ($i['@attributes']['type'] ?? '').'/'.($i['@attributes']['bus'] ?? '');
+			if (($i['@attributes']['type'] ?? '')=='evdev' || in_array($key, $keys)) continue;
+			if ($oldvmrc && in_array($key, ['tablet/usb','mouse/ps2','keyboard/ps2'])) continue; // came with a console the form no longer generates
+			$inputs[] = $i; $keys[] = $key;
+		}
+		if ($inputs) $new['devices']['input'] = $inputs;
+		// sound: the form owns the model; keep address and codec of a stored card with the same model
+		if (isset($new['devices']['sound'])) {
+			$sounds = $list($new['devices']['sound']);
+			$oldsounds = $list($old['devices']['sound']);
+			foreach ($sounds as $n => $sound)
+				foreach ($oldsounds as $o => $d)
+					if (($d['@attributes']['model'] ?? '') == ($sound['@attributes']['model'] ?? '-')) {
+						foreach (['address','codec'] as $c) if (isset($d[$c]) && !isset($sounds[$n][$c])) $sounds[$n][$c] = $d[$c];
+						unset($oldsounds[$o]); // each stored card is used once
+						break;
+					}
+			$new['devices']['sound'] = $sounds;
+		}
+		// graphics: the form owns type, port, autoport, websocket, keymap, password and the mouse child; keep other attributes and children
+		// (listen has no form field, the form always writes 0.0.0.0, so a stored listen wins) of a stored console of the same type
+		if (isset($new['devices']['graphics'])) {
+			$graphics = $list($new['devices']['graphics']);
+			foreach ($graphics as $n => $g) {
+				$type = $g['@attributes']['type'] ?? '';
+				if (!in_array($type, $vmrc)) continue; // egl-headless is written completely by the form
+				foreach ($list($old['devices']['graphics']) as $d) {
+					if (($d['@attributes']['type'] ?? '-') != $type) continue;
+					$own = ['type','port','autoport','websocket','keymap','passwd','passwdValidTo'];
+					foreach ($d['@attributes'] ?? [] as $a => $val) if (!in_array($a, $own) && ($a=='listen' || !isset($graphics[$n]['@attributes'][$a]))) $graphics[$n]['@attributes'][$a] = $val;
+					foreach ($d as $c => $val) if ($c != '@attributes' && $c != 'mouse' && ($c=='listen' || !isset($graphics[$n][$c]))) $graphics[$n][$c] = $val;
+					// a stored listen child without the listen attribute: drop the form's 0.0.0.0, libvirt would copy it into an empty
+					// <listen type='address'/> (instead of the qemu.conf default) or reject it as not matching the child's address
+					if (isset($d['listen']) && !isset($d['@attributes']['listen'])) unset($graphics[$n]['@attributes']['listen']);
+					break;
+				}
+			}
+			$new['devices']['graphics'] = $graphics;
+		}
+		// a keymap removed in the form ("none") must not come back: keymap is form owned (the check that used to do this tested $old after it was unset)
+		unset($old['clock'], $old['devices']['input'], $old['devices']['sound'], $old['devices']['graphics']);
 		// update parent arrays
 		if (!$old['devices']['hostdev']) unset($old['devices']['hostdev']);
 		if (!$new['devices']['hostdev']) unset($new['devices']['hostdev']);
