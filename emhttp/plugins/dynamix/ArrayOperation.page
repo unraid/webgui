@@ -305,6 +305,13 @@ function tab0() {
 }
 
 function stopArray(form) {
+  jobsGuard('stop',function(){stopArrayConfirm(form);},function(){
+    $(form).append('<input type="hidden" name="cmdStop" value="Stop">');
+    form.submit();
+  });
+}
+
+function stopArrayConfirm(form) {
   $(form).append('<input type="hidden" name="cmdStop" value="Stop">');
 <?if ($confirm['stop']):?>
   swal({
@@ -363,6 +370,13 @@ function parityHistory() {
 }
 
 function shutdown_now(form, cmd) {
+  jobsGuard(cmd,function(){shutdown_confirm(form,cmd);},function(){
+    $(form).append('<input type="hidden" name="cmd" value="'+cmd+'">');
+    form.submit();
+  });
+}
+
+function shutdown_confirm(form, cmd) {
   $(form).append('<input type="hidden" name="cmd" value="'+cmd+'">');
 <?if ($confirm['down']):?>
   switch (cmd) {
@@ -437,11 +451,32 @@ function hideMoverRows() {
   }
 }
 
+// disable Reboot and Shutdown while a job is running and say which one
+// buttons are only disabled once the job list names a job; if the lookup fails or finds nothing they stay usable
+function jobsBlock(block) {
+  var buttons = $('input[name="reboot"],input[name="shutdown"]');
+  var release = function(){buttons.prop('disabled',false); $('#jobs-info').html('');};
+  if (!block) {release(); return;}
+  $.getJSON('/webGui/include/ActiveJobs.php').done(function(jobs) {
+    if (!$.isArray(jobs) || !jobs.length) {release(); return;}
+    buttons.prop('disabled',true);
+    $('#jobs-info').html("<small>_(Disabled)_ -- _(Reboot and Shutdown are blocked while the following is running)_:</small>"+jobsHtml(jobs)
+      +"<small><a href='#' onclick=\"jobsOverride('reboot',function(){forceShutdown('reboot')});return false\">_(Reboot anyway)_...</a> &bull; <a href='#' onclick=\"jobsOverride('shutdown',function(){forceShutdown('shutdown')});return false\">_(Shutdown anyway)_...</a></small>");
+  }).fail(release);
+}
+
+function forceShutdown(cmd) {
+  var form = document.shutdownOps;
+  $(form).append('<input type="hidden" name="cmd" value="'+cmd+'">');
+  form.submit();
+}
+
 <?if (_var($var,'fsState') == 'Started'):?>
 var mymonitor = new NchanSubscriber('/sub/mymonitor',{subscriber:'websocket', reconnectTimeout:5000});
 mymonitor.on('message', function(state) {
   switch (state) {
   case '0': // normal operation
+    jobsBlock(false);
     $('#stop-button').prop('disabled',false);
     $('#stop-text').html("");
 <?if (_var($var,'fsState') != "Stopped"):?>
@@ -459,6 +494,7 @@ mymonitor.on('message', function(state) {
     hideMoverRows();
     break;
   case '1': // parity running
+    jobsBlock(true);
     $('#stop-button').prop('disabled',true);
     $('#stop-text').html("<br><small>_(Disabled)_ -- _(Parity operation is running)_</small>");
 <?if (_var($var,'fsState') != "Stopped" && _var($var,'mdResync',0) > 0):?>
@@ -476,6 +512,7 @@ mymonitor.on('message', function(state) {
     hideMoverRows();
     break;
   case '2': // mover running
+    jobsBlock(true);
     $('#stop-button').prop('disabled',true);
     $('#stop-text').html("<br><small>_(Disabled)_ -- _(Mover is running)_</small>");
 <?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
@@ -490,6 +527,7 @@ mymonitor.on('message', function(state) {
 <?endif;?>
     break;
   case '3': // btrfs running
+    jobsBlock(true);
     $('#stop-button').prop('disabled',true);
     $('#stop-text').html("<br><small>_(Disabled)_ -- _(BTRFS operation is running)_</small>");
 <?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
@@ -499,6 +537,20 @@ mymonitor.on('message', function(state) {
 <?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',true);
     $('#mover-text').html("_(Disabled)_ -- _(BTRFS operation is running)_");
+<?endif;?>
+    hideMoverRows();
+    break;
+  case '4': // zfs scrub running
+    jobsBlock(true);
+    $('#stop-button').prop('disabled',true);
+    $('#stop-text').html("<br><small>_(Disabled)_ -- _(ZFS scrub is running)_</small>");
+<?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
+    $('#mover-button').prop('disabled',true);
+    $('#mover-text').html("_(Disabled)_ -- _(ZFS scrub is running)_");
+<?endif;?>
+<?if (!$pool_devices):?>
+    $('#mover-button').prop('disabled',true);
+    $('#mover-text').html("_(Disabled)_ -- _(ZFS scrub is running)_");
 <?endif;?>
     hideMoverRows();
     break;
@@ -976,7 +1028,7 @@ endswitch;
 <form name="shutdownOps" method="POST" action="/webGui/include/Boot.php">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
  <tr><td></td><td><span class="buttons-spaced"><input type="button" name="reboot" value="_(Reboot)_" onclick="shutdown_now(this.form,'reboot')"><input type="button" name="shutdown" value="_(Shutdown)_" onclick="shutdown_now(this.form,'shutdown')"></span></td>
- <td>**_(Reboot)_** _(will activate a *clean* system reset)_.<br>**_(Shutdown)_** _(will activate a *clean* system power down)_.<br><label class="flex flex-row items-center gap-2"><input type="checkbox" name="safemode">_(Reboot in safe mode)_</label></td></tr>
+ <td>**_(Reboot)_** _(will activate a *clean* system reset)_.<br>**_(Shutdown)_** _(will activate a *clean* system power down)_.<br><label class="flex flex-row items-center gap-2"><input type="checkbox" name="safemode">_(Reboot in safe mode)_</label><div id="jobs-info"></div></td></tr>
  <tr><td></td><td class="line" colspan="2"></td></tr>
 </table>
 </form>

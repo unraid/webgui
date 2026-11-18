@@ -2151,6 +2151,10 @@ function toggleChart(init) {
 }
 
 function StopArray() {
+  jobsGuard('stop',StopArrayAsk,StopArrayNow);
+}
+
+function StopArrayAsk() {
 <?if ($confirm['stop']):?>
   swal({title:"_(Proceed)_?",text:"_(This will stop the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StopArrayNow();});
 <?else:?>
@@ -2177,6 +2181,10 @@ function StartArrayNow() {
 }
 
 function Reboot() {
+  jobsGuard('reboot',RebootAsk,RebootNow);
+}
+
+function RebootAsk() {
 <?if ($confirm['down']):?>
   swal({title:"_(Proceed)_?",text:"_(This will reboot the system)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){RebootNow();});
 <?else:?>
@@ -2190,6 +2198,10 @@ function RebootNow() {
 }
 
 function Shutdown() {
+  jobsGuard('shutdown',ShutdownAsk,ShutdownNow);
+}
+
+function ShutdownAsk() {
 <?if ($confirm['down']):?>
   swal({title:"_(Proceed)_?",text:"_(This will shutdown the system)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){ShutdownNow();});
 <?else:?>

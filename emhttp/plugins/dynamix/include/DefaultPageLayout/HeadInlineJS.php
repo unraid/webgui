@@ -380,6 +380,65 @@ function removeRebootNotice(message="<?=_('You must reboot for changes to take e
   $.post("/plugins/dynamix.plugin.manager/scripts/PluginAPI.php",{action:'removeRebootNotice',message:message});
 }
 
+// Jobs that a reboot, shutdown or array stop would interrupt (list built by include/ActiveJobs.php).
+// jobsGuard() is the one check used by every GUI button that reboots, shuts down or stops the array.
+function jobsHtml(jobs) {
+  var html = '<ul style="text-align:left">';
+  jobs.forEach(function(job) {
+    var pool = $('<span>').text(job.pool).html();
+    switch (job.type) {
+    case 'parity':
+      html += "<li><b><?=_('Parity operation')?></b>: <?=_('wait until it has finished, or use Pause or Cancel in Array Operation on the Main page')?>.</li>";
+      break;
+    case 'mover':
+      html += "<li><b><?=_('Mover')?></b>: <?=_('wait until it has finished')?>. <?=_('The file being moved cannot be interrupted')?>.</li>";
+      break;
+    case 'btrfs':
+      html += "<li><b>btrfs "+job.action+"</b> <?=_('on pool')?> <b>"+pool+"</b>: <?=_('wait until it has finished, or open the pool on the Main page and use Cancel under')?> "+(job.action=='scrub' ? "<?=_('Scrub Status')?>" : "<?=_('Balance Status')?>")+".</li>";
+      break;
+    case 'zfs':
+      html += "<li><b>ZFS <?=_('scrub')?></b> <?=_('on pool')?> <b>"+pool+"</b>: <?=_('wait until it has finished, or open the pool on the Main page and use Cancel under Scrub Status')?>.</li>";
+      break;
+    }
+  });
+  return html + '</ul>';
+}
+
+function jobsOverride(what, force) {
+  swal({
+    title:"<?=_('Are you sure')?>?",
+    text:"<?=_('Interrupting these jobs can leave the array not cleanly stopped, which triggers a parity check at the next start, and can leave an incomplete file behind')?>.",
+    type:'warning',
+    html:true,
+    showCancelButton:true,
+    confirmButtonText:"<?=_('Yes, do it anyway')?>",
+    cancelButtonText:"<?=_('Cancel')?>"
+  },function(p){
+    if (p) force();
+  });
+}
+
+function jobsBlocked(what, jobs, force) {
+  swal({
+    title:"<?=_('Jobs are running')?>",
+    text:"<?=_('This action is blocked while the following is running')?>:"+jobsHtml(jobs),
+    type:'warning',
+    html:true,
+    showCancelButton:true,
+    closeOnConfirm:false,
+    confirmButtonText:"<?=_('Do it anyway')?>...",
+    cancelButtonText:"<?=_('OK')?>"
+  },function(p){
+    if (p) jobsOverride(what, force);
+  });
+}
+
+function jobsGuard(what, proceed, force) {
+  $.getJSON('/webGui/include/ActiveJobs.php').done(function(jobs) {
+    if (jobs.length) jobsBlocked(what, jobs, force); else proceed();
+  }).fail(proceed);
+}
+
 function showUpgradeChanges() { /** @note can likely be removed, not used in webgui or api repos */
   openChanges("showchanges /tmp/plugins/unRAIDServer.txt","<?=_('Release Notes')?>");
 }
