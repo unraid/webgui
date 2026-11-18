@@ -49,6 +49,29 @@ EOT;
   return 1;
 }
 
+/*
+   Value for the From and Reply-To headers: the plain sending address, or "display name" <address>.
+   Control characters in the name are dropped so it can never start a new header line.
+   A printable ASCII name is sent as an RFC 5322 quoted string with " and \ escaped.
+   Any other name (non-ASCII, or containing < or >) is sent as RFC 2047 encoded-words, because ssmtp
+   takes the envelope sender from the first '<' in the From header.
+*/
+function mail_sender($address, $name) {
+  $name = trim(preg_replace('/[\x00-\x1F\x7F]+/', ' ', (string)$name));
+  if ($name === '') return $address;
+  if (preg_match('/^[\x20-\x7E]+$/', $name) && strpbrk($name, '<>') === false) {
+    return '"'.addcslashes($name, '"\\').'" <'.$address.'>';
+  }
+  // keep each encoded-word within 75 characters (45 bytes of text) and split on character boundaries
+  $words = []; $chunk = '';
+  foreach (preg_split('//u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: str_split($name) as $char) {
+    if (strlen($chunk.$char) > 45) {$words[] = '=?UTF-8?B?'.base64_encode($chunk).'?='; $chunk = '';}
+    $chunk .= $char;
+  }
+  $words[] = '=?UTF-8?B?'.base64_encode($chunk).'?=';
+  return implode(' ', $words).' <'.$address.'>';
+}
+
 function generate_email($event, $subject, $description, $importance, $message, $recipients, $fqdnlink) {
   global $ssmtp;
   $rcpt = $ssmtp['RcptTo'];
@@ -62,8 +85,9 @@ function generate_email($event, $subject, $description, $importance, $message, $
   $headers[] = "MIME-Version: 1.0";
   $headers[] = "X-Mailer: PHP/".phpversion();
   $headers[] = "Content-type: text/plain; charset=utf-8";
-  $headers[] = "From: {$ssmtp['root']}";
-  $headers[] = "Reply-To: {$ssmtp['root']}";
+  $sender    = mail_sender($ssmtp['root'], $ssmtp['SenderName'] ?? '');
+  $headers[] = "From: $sender";
+  $headers[] = "Reply-To: $sender";
   if (($importance == "warning" || $importance == "alert") && $ssmtp['SetEmailPriority']=="True") {
     $headers[] = "X-Priority: 1 (highest)";
     $headers[] = "X-Mms-Priority: High";
