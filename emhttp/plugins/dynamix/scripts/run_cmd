@@ -28,7 +28,8 @@ if (empty($logs)) $logs = [$files];
 
 foreach ($color as $cat => $val) echo $val,$cat,$last,"  "; echo "\n\n";
 foreach ($logs as $log) {
-  $cmd = popen(implode(' ',$argv).' '.escapeshellarg($log),'r');
+  // quote each argument again: the shell that ran this script already removed the quotes, e.g. of a grep pattern 'sdb|ata5[.:]'
+  $cmd = popen(implode(' ',array_map('escapeshellarg',$argv)).' '.escapeshellarg($log),'r');
   while (($line = fgets($cmd))!==false) {
     $lead = $last;
     foreach ($match as $type) foreach ($type['text'] as $text) if (preg_match("/$text/i",$line)) {
