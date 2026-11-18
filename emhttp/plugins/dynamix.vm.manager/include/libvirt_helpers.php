@@ -1482,9 +1482,25 @@ class Array2XML {
 		return false;
 	}
 
+	// domain:bus:slot.function of a guest <address type='pci'>, read as libvirt reads it (0x hex or decimal)
+	function pci_guest_address($address) {
+		$a = $address['@attributes'] ?? [];
+		return implode(':', array_map(fn($k) => intval($a[$k] ?? '0', 0), ['domain','bus','slot','function']));
+	}
+
 	function array_update_recursive(&$old, &$new) {
 		$hostold = $old['devices']['hostdev']; // existing devices including custom settings
 		$hostnew = $new['devices']['hostdev']; // GUI generated devices
+		// guest PCI addresses the form sets itself: a kept hostdev address must not take one of them
+		$used = [];
+		$collect = function($node) use (&$collect, &$used) {
+			foreach ($node as $name => $child) {
+				if (!is_array($child) || $name === 'source') continue;
+				if ($name === 'address' && ($child['@attributes']['type'] ?? '') == 'pci') $used[pci_guest_address($child)] = true;
+				$collect($child);
+			}
+		};
+		$collect($new['devices'] ?? []);
 		// update USB & PCI host devices
 		foreach ($hostnew as $key => $device) {
 			$auto = $device['tag'];
@@ -1498,9 +1514,28 @@ class Array2XML {
 				$v = $d['source']['vendor']['@attributes']['id'];
 				$p = $d['source']['product']['@attributes']['id'];
 				$p2 = $d['source']['address']['@attributes'];
-				if ($v && $p && $v==$vendor && $p==$product) unset($old['devices']['hostdev'][$k]);
-				if ($p2['bus'] && $p2['slot'] && $p2['function'] && $p2['bus']==$pci['bus'] && $p2['slot']==$pci['slot'] && $p2['function']==$function) unset($old['devices']['hostdev'][$k]);
+				$match = ($v && $p && $v==$vendor && $p==$product) || ($p2['bus'] && $p2['slot'] && $p2['function'] && intval($p2['domain'] ?? '0',0)==intval($pci['domain'] ?? '0',0) && $p2['bus']==$pci['bus'] && $p2['slot']==$pci['slot'] && $p2['function']==$function);
+				if (!$match) continue;
+				// keep what the GUI has no field for: a user alias and a hand-set guest address (boot order, rom and multifunction come from the form)
+				if (isset($new['devices']['hostdev'][$key])) {
+					if (isset($d['alias']) && !isset($new['devices']['hostdev'][$key]['alias'])) $new['devices']['hostdev'][$key]['alias'] = $d['alias'];
+					// function 1-7 stays with the form: function 0 of that slot may be rebuilt or dropped, and a guest skips a slot without function 0
+					if (isset($d['address']) && !isset($new['devices']['hostdev'][$key]['address']) && ($d['address']['@attributes']['multifunction'] ?? '') != 'on' && hexdec($d['address']['@attributes']['function'] ?? '0')==0
+						&& !isset($used[pci_guest_address($d['address'])])) {
+						$new['devices']['hostdev'][$key]['address'] = $d['address'];
+						$used[pci_guest_address($d['address'])] = true;
+					}
+				}
+				unset($old['devices']['hostdev'][$k]);
 			}
+		}
+		// hostdevs the form does not list are kept as they are: move them past the form's indexes,
+		// or array_replace_recursive() would merge each into the form device at the same index
+		if (!empty($old['devices']['hostdev']) && !empty($new['devices']['hostdev'])) {
+			$next = max(array_keys($new['devices']['hostdev'])) + 1;
+			$kept = [];
+			foreach ($old['devices']['hostdev'] as $d) $kept[$next++] = $d;
+			$old['devices']['hostdev'] = $kept;
 		}
 		// remove and rebuild usb + scsi controllers
 		$devices = $old['devices']['controller'];
