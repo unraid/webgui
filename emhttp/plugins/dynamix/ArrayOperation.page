@@ -342,6 +342,34 @@ function stopParity(form, text) {
 <?endif;?>
 }
 
+function stopMover(button) {
+  swal({
+    title:"_(Stop Mover)_?",
+    text:"_(The Mover stops before its next file)_. _(The file it is copying now is finished and moved completely)_.<br>_(Files not moved yet stay where they are and are moved on the next run)_. _(You can start the Mover again at any time)_.<br><br>_(This runs)_ <code>mover stop</code>.",
+    type:'warning',
+    html:true,
+    showCancelButton:true,
+    confirmButtonText:"_(Stop)_",
+    cancelButtonText:"_(Cancel)_",
+    closeOnConfirm:false,
+    showLoaderOnConfirm:true
+  },function(p){
+    if (!p) return;
+    button.disabled = true;
+    $.post('/webGui/include/MoverStop.php',function(data){
+      if (data.code != 0) {stopMoverFailed(button,data.result); return;}
+      swal.close();
+    },'json').fail(function(xhr,status,error){
+      stopMoverFailed(button,(xhr.responseJSON && xhr.responseJSON.error) || "_(Request failed)_"+(xhr.status ? ' (HTTP '+xhr.status+' '+error+')' : ''));
+    });
+  });
+}
+
+function stopMoverFailed(button, reason) {
+  button.disabled = false;
+  swal({title:"_(Mover not stopped)_",text:$('<div>').text(reason).html(),type:'error',html:true,confirmButtonText:"_(Ok)_"});
+}
+
 function pauseParity(form) {
   $.post('/webGui/include/ParityControl.php',{action:'pause'},function(){
     $('#pauseButton').val("_(Resume)_").prop('disabled',true).prop('onclick',null).off('click').click(function(){resumeParity(form);});
@@ -440,6 +468,9 @@ function hideMoverRows() {
 <?if (_var($var,'fsState') == 'Started'):?>
 var mymonitor = new NchanSubscriber('/sub/mymonitor',{subscriber:'websocket', reconnectTimeout:5000});
 mymonitor.on('message', function(state) {
+  // while the Mover runs its Stop button takes the place of Move
+  $('#mover-button').toggle(state != '2');
+  $('#mover-stop-button').toggle(state == '2').prop('disabled', false);
   switch (state) {
   case '0': // normal operation
     $('#stop-button').prop('disabled',false);
@@ -480,13 +511,11 @@ mymonitor.on('message', function(state) {
     $('#stop-text').html("<br><small>_(Disabled)_ -- _(Mover is running)_</small>");
 <?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
     $('#mover-button').prop('disabled',true);
-    $('#mover-text').html("_(Disabled)_ - _(Mover is running)_.");
-
-
+    $('#mover-text').html("_(Mover is running)_. <b>_(Stop)_</b> _(will stop the Mover)_.");
 <?endif;?>
 <?if (!$pool_devices):?>
     $('#mover-button').prop('disabled',true);
-    $('#mover-text').html("_(Disabled)_ - _(Mover/Empty is running)_.");
+    $('#mover-text').html("_(Mover/Empty is running)_. <b>_(Stop)_</b> _(will stop the Mover)_.");
 <?endif;?>
     break;
   case '3': // btrfs running
@@ -942,7 +971,7 @@ endswitch;
 <?if (_var($var,'shareUser') == 'e' && $pool_devices):?>
 <form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
-<tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Move)_"></td><td id="mover-text"></td></tr>
+<tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Move)_"><input type="button" id="mover-stop-button" value="_(Stop)_" onclick="stopMover(this)" style="display:none"></td><td id="mover-text"></td></tr>
  <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>
  <tr id="moverrow1" hidden><td></td><td id="movertitle1">_(Action)_</td><td id="moverline1"></td><td></td></tr>
  <tr id="moverrow2" hidden><td></td><td id="movertitle2">_(Progress)_</td><td><span id="moverline2" style="width:50"></span></td><td></td></tr>
@@ -954,7 +983,7 @@ endswitch;
 <?if (_var($var,'shareUser') == 'e' && !$pool_devices):?>
 <form name="mover_schedule" method="POST" action="/update.htm" target="progressFrame">
 <table markdown="1" class="ArrayOperation-Table array_status noshift">
-<tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Empty)_"></td><td id="mover-text"></td></tr>
+<tr><td></td><td><input type="submit" id="mover-button" name="cmdStartMover" value="_(Empty)_"><input type="button" id="mover-stop-button" value="_(Stop)_" onclick="stopMover(this)" style="display:none"></td><td id="mover-text"></td></tr>
  <tr id="moverrow0" hidden><td></td><td><span id="movertitle0">_(File being processed)_</span></td><td id="moverline0"></td><td></td></tr>
  <tr id="moverrow1" hidden><td></td><td id="movertitle1">_(Action)_</td><td id="moverline1"></td><td></td></tr>
  <tr id="moverrow2" hidden><td></td><td id="movertitle2">_(Progress)_</td><td><span id="moverline2" style="width:50"></span></td><td></td></tr>
