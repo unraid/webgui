@@ -384,6 +384,32 @@ function autov($file, $ret=false) {
     echo $newFile;
 }
 
+// Pick the theme variant of a plugin icon, when the plugin ships one.
+// Next to its 'icon.png' a plugin may place 'icon-dark.png' and/or 'icon-light.png'; the
+// variant matching the active theme is used, so a full color logo stays readable on every
+// theme the way glyph icons already are. Which themes count as dark is decided by
+// ThemeHelper, the same source the rest of the GUI uses.
+// The path is returned unchanged when the plugin ships no matching variant, so plugins that
+// only have a single icon keep rendering exactly what they render today.
+function theme_icon($icon) {
+  global $docroot, $display;
+  static $suffix = null;
+  if (substr($icon,-4) != '.png') return $icon;
+  if ($suffix === null) {
+    require_once "$docroot/plugins/dynamix/include/ThemeHelper.php";
+    // $display is set on a normal page load, but this helper is also reached from standalone
+    // AJAX endpoints (the plugins list), so read the theme from the config there.
+    $theme = _var($display,'theme');
+    if (!$theme) {
+      $cfg = parse_plugin_cfg('dynamix',true);
+      $theme = $cfg['display']['theme'] ?? 'white';
+    }
+    $suffix = (new ThemeHelper($theme))->isDarkTheme() ? '-dark' : '-light';
+  }
+  $variant = substr($icon,0,-4).$suffix.'.png';
+  return file_exists("$docroot/$variant") ? $variant : $icon;
+}
+
 function transpose_user_path($path) {
   if (strpos($path,'/mnt/user/') === 0 && file_exists($path)) {
     $realdisk = trim(shell_exec("getfattr --absolute-names --only-values -n system.LOCATION ".escapeshellarg($path)." 2>/dev/null"));
