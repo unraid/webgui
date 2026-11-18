@@ -197,6 +197,7 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
     exec("/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/docker rm '" . escapeshellarg($Name) . "'");
   }
   $recreated = execCommand_nchan($cmd);
+  if ($recreated) $netParents[] = $Name;
   if ($recreated && !connectExtraNetworks($Name, $ExtraNetworks, $Network)) {
     write("addLog\0<span class='error'><b>"._('Error').":</b> "._('Could not connect one or more additional networks')."</span>");
   }
@@ -206,5 +207,9 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   // remove old orphan image since it's no longer used by this container
   if ($oldImageID && $oldImageID != $newImageID) removeImage_nchan($oldImageID);
 }
+// containers that use the network of an updated container are left with only loopback until rebuilt
+rebuildNetworkDependents($netParents ?? [], false,
+  function($line) {write("<p class='logLine'></p>","addLog\0<b>".htmlspecialchars($line)."</b>");},
+  function($name, $cmd) {removeContainer_nchan($name); execCommand_nchan($cmd);});
 write('_DONE_','');
 ?>

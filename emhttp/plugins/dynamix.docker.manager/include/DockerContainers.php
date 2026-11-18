@@ -48,6 +48,9 @@ $allInfo = $DockerTemplates->getAllInfo();
 $docker = [];
 $null = '0.0.0.0';
 
+// containers whose network container was recreated or removed; rebuilt from their template on load
+$orphans = DockerUtil::networkOrphans();
+
 $autostart = (array)@file($autostart_file,FILE_IGNORE_NEW_LINES);
 $names = array_map('var_split',$autostart);
 
@@ -79,7 +82,7 @@ foreach ($containers as $ct) {
   $paused = $info['paused'] ? 1 : 0;
   $is_autostart = $info['autostart'] ? 'true':'false';
   $composestack = isset($ct['ComposeProject']) ? $ct['ComposeProject'] : '';
-  $updateStatus = substr($ct['NetworkMode'], -4) == ':???' ? 2 : ($info['updated'] == 'true' ? 0 : ($info['updated'] == 'false' ? 1 : 3));
+  $updateStatus = !empty($orphans[$name]) ? 2 : ($info['updated'] == 'true' ? 0 : ($info['updated'] == 'false' ? 1 : 3));
   $template = $info['template']??'';
   $shell = $info['shell']??'';
   $webGui = html_entity_decode($info['url']??'');
