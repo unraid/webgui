@@ -254,9 +254,9 @@ switch ($themeHelper->getThemeName()) { // $themeHelper set in DefaultPageLayout
                                 <span class='tile-header-right'>
                                     <span class='tile-ctrl flex flex-row items-center gap-4'>
                                         <?if ($parity||$mover||$btrfs):?>
-                                            <span class='fa fa-fw fa-<?=$started?'stop':'play'?>-circle busy' title="<?=$started?_("Stop the array"):_("Start the array")?>"></span>
+                                            <span class='fa fa-fw fa-<?=$started?'stop':'play'?>-circle busy' title="<?=$started?_("Stop the array and/or pools"):_("Start the array and/or pools")?>"></span>
                                         <?else:?>
-                                            <span class='fa fa-fw fa-<?=$started?'stop':'play'?>-circle hand' title="<?=$started?_("Stop the array"):_("Start the array")?>" onclick='<?=$started?'Stop':'Start'?>Array()'></span>
+                                            <span class='fa fa-fw fa-<?=$started?'stop':'play'?>-circle hand' title="<?=$started?_("Stop the array and/or pools"):_("Start the array and/or pools")?>" onclick='<?=$started?'Stop':'Start'?>Array()'></span>
                                         <?endif;?>
                                         <?if ($sleep):?>
                                             <span class='fa fa-fw fa-moon-o hand' title="_(Put system to sleep)_" onclick='Sleep()'></span>
@@ -2152,7 +2152,7 @@ function toggleChart(init) {
 
 function StopArray() {
 <?if ($confirm['stop']):?>
-  swal({title:"_(Proceed)_?",text:"_(This will stop the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StopArrayNow();});
+  swal({title:"_(Proceed)_?",text:"_(This will stop the array and/or pools)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StopArrayNow();});
 <?else:?>
    StopArrayNow();
 <?endif;?>
@@ -2165,7 +2165,7 @@ function StopArrayNow() {
 
 function StartArray() {
 <?if ($confirm['stop']):?>
-  swal({title:"_(Proceed)_?",text:"_(This will start the array)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StartArrayNow();});
+  swal({title:"_(Proceed)_?",text:"_(This will start the array and/or pools)_",type:'warning',html:true,showCancelButton:true,confirmButtonText:"_(Proceed)_",cancelButtonText:"_(Cancel)_"},function(){StartArrayNow();});
 <?else:?>
   StartArrayNow();
 <?endif;?>
