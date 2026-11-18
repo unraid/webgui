@@ -32,15 +32,8 @@ if (empty($vms)) {
   echo '<tr><td colspan="8" style="text-align:center;padding-top:12px">'._('No Virtual Machines installed').'</td></tr>';
   return;
 }
-if (file_exists($user_prefs)) {
-  $prefs = (array)@parse_ini_file($user_prefs);
-  $sort = [];
-  foreach ($vms as $vm) $sort[] = array_search($vm,$prefs);
-  array_multisort($sort,SORT_NUMERIC,$vms);
-  unset($sort);
-} else {
-  natcasesort($vms);
-}
+natcasesort($vms);
+if (file_exists($user_prefs)) $vms = sort_by_order($vms, array_values((array)@parse_ini_file($user_prefs)));
 $i = 0;
 $kvm = ['var kvm=[];'];
 $show = explode(',',unscript(_var($_GET,'show')));

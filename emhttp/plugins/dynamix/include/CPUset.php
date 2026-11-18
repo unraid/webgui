@@ -67,13 +67,8 @@ case 'vm':
   $vms = $libvirt_running=='yes' ? ($lv->get_domains() ?: []) : [];
   $user_prefs = '/boot/config/plugins/dynamix.vm.manager/userprefs.cfg';
   // list vms per user preference
-  if (file_exists($user_prefs)) {
-    $prefs = parse_ini_file($user_prefs); $sort = [];
-    foreach ($vms as $vm) $sort[] = array_search($vm,$prefs) ?? 999;
-    array_multisort($sort,SORT_NUMERIC,$vms);
-  } else {
-    natcasesort($vms);
-  }
+  natcasesort($vms);
+  if (file_exists($user_prefs)) $vms = sort_by_order($vms, array_values((array)@parse_ini_file($user_prefs)));
   foreach ($vms as $vm) {
     $uuid = $lv->domain_get_uuid($lv->get_domain_by_name($vm));
     $cfg = domain_to_config($uuid);
@@ -103,12 +98,7 @@ case 'ct':
   $user_prefs = $dockerManPaths['user-prefs'];
   $cts = []; foreach ($containers as $ct) $cts[] = $ct['Name'];
   // list containers per user preference
-  if (file_exists($user_prefs)) {
-    $prefs = parse_ini_file($user_prefs); $sort = [];
-    foreach ($containers as $ct) $sort[] = array_search($ct['Name'],$prefs) ?? 999;
-    array_multisort($sort,SORT_NUMERIC,$containers);
-    unset($sort);
-  }
+  $containers = DockerUtil::sortContainers($containers);
   foreach ($containers as $ct) {
     if ( ! is_file($allInfo[$ct['Name']]['template']) ) continue;
     echo "<tr><td>{$ct['Name']}</td>";
