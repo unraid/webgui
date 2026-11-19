@@ -516,6 +516,10 @@ build_locations(){
 	    proxy_set_header Host $host;
 	    proxy_set_header Upgrade $http_upgrade;
 	    proxy_set_header Connection $connection_upgrade;
+	    set $terminal_origin_allowed 0;
+	    if ($http_origin = "") { set $terminal_origin_allowed 1; }
+	    if ($http_origin = "$scheme://$http_host") { set $terminal_origin_allowed 1; }
+	    if ($terminal_origin_allowed = 0) { return 403; }
 	}
 	location = /webterminal/auth_token.js {
 	    return 204;
@@ -530,6 +534,10 @@ build_locations(){
 	    proxy_set_header Host $host;
 	    proxy_set_header Upgrade $http_upgrade;
 	    proxy_set_header Connection $connection_upgrade;
+	    set $terminal_origin_allowed 0;
+	    if ($http_origin = "") { set $terminal_origin_allowed 1; }
+	    if ($http_origin = "$scheme://$http_host") { set $terminal_origin_allowed 1; }
+	    if ($terminal_origin_allowed = 0) { return 403; }
 	}
 	EOF
 }
