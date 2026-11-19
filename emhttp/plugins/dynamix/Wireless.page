@@ -171,9 +171,19 @@ function manage_wifi(ssid,task) {
   }
   if (ssid) {
     $.post('/webGui/include/Wireless.php',{cmd:'join',ssid:ssid,task:task},function(text) {
-      swal({title:decodeURIComponent(ssid),text:text,animation:'none',html:true,confirmButtonText:"_(Join this network)_",showCancelButton:true,cancelButtonText:"_(Cancel)_"},function(join){
+      var title = $('<span>').text(decodeURIComponent(ssid)).html();
+      swal({title:title,text:text,animation:'none',html:true,confirmButtonText:"_(Join this network)_",showCancelButton:true,cancelButtonText:"_(Cancel)_"},function(join){
         if (join) $('form[name=wifi]').submit();
       });
+    }).fail(function(xhr) {
+      if (xhr.status == 422) {
+        var saved = task == 1;
+        swal({title:"_(Cannot join Wi-Fi network)_",text:xhr.responseText,type:'error',
+              confirmButtonText:saved ? "_(Forget this network)_" : "_(Ok)_",
+              showCancelButton:saved,cancelButtonText:"_(Cancel)_"},function(confirmed) {
+          if (saved && confirmed) manage_wifi(ssid,2);
+        });
+      }
     });
   } else {
     swal({title:"_(Missing Network Name)_",animation:'none',html:true,type:'error',confirmButtonText:"_(Ok)_"});

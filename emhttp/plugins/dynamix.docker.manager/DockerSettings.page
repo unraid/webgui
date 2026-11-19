@@ -19,6 +19,7 @@ Tag="icon-docker"
 <?
 // Add the Docker JSON client
 require_once "$docroot/plugins/dynamix.docker.manager/include/DockerClient.php";
+require_once "$docroot/plugins/dynamix/include/WirelessState.php";
 
 $DockerClient = new DockerClient();
 exec("/etc/rc.d/rc.docker status >/dev/null",$dummy,$DockerStopped);
@@ -52,7 +53,7 @@ foreach ($other as $network) {
 
 $include = $include6 = $address = $address6 = $gateway = $gateway6 = $unset = $protocol = [];
 $wide    = false;
-$wlan    = (array)@parse_ini_file('/var/local/emhttp/wireless.ini');
+$wlan    = read_wireless_state('/var/local/emhttp/wireless.ini');
 
 foreach ($custom as $network) {
   if (in_array($network,$slaves)) continue;

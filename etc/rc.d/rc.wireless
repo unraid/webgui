@@ -29,9 +29,45 @@ CONF6="/proc/sys/net/ipv6/conf"
 # library functions
 . /etc/rc.d/rc.library.source
 
-# get settings
-[[ -r $INI ]] && . $INI
-PORT=${PORT:-wlan0}
+# Read generated state as data. Never source values from the state file.
+load_ini(){
+  local key encoded value
+  unset PORT SSID ATTR1 ATTR2 ATTR3 ATTR4 USERNAME PASSWORD AUTOJOIN SECURITY DHCP4 DNS4 IP4 MASK4 GATEWAY4 SERVER4 DHCP6 DNS6 IP6 MASK6 GATEWAY6 SERVER6 HOSTNAME
+  while IFS='=' read -r key encoded; do
+    case "$key" in
+      PORT|SSID|ATTR1|ATTR2|ATTR3|ATTR4|USERNAME|PASSWORD|AUTOJOIN|SECURITY|DHCP4|DNS4|IP4|MASK4|GATEWAY4|SERVER4|DHCP6|DNS6|IP6|MASK6|GATEWAY6|SERVER6|HOSTNAME)
+        encoded=${encoded//-/+}
+        encoded=${encoded//_/\/}
+        while (( ${#encoded} % 4 )); do encoded+='='; done
+        value="$(printf '%s' "$encoded" | base64 -d 2>/dev/null; printf '\034')"
+        value=${value%$'\034'}
+        printf -v "$key" '%s' "$value"
+        ;;
+    esac
+  done < <(
+    /usr/bin/php -r '
+      $path = $argv[1];
+      $state = is_readable($path) ? parse_ini_file($path, false, INI_SCANNER_RAW) : false;
+      if (!is_array($state)) exit(1);
+      $encoded = ($state["FORMAT"] ?? "") === "base64url-v1";
+      foreach ($state as $key => $value) {
+        if ($key === "FORMAT" || !preg_match("/^[A-Za-z0-9_]+$/", $key) || !is_scalar($value)) continue;
+        $value = (string)$value;
+        if ($encoded) {
+          $value = strtr($value, "-_", "+/");
+          $padding = strlen($value) % 4;
+          if ($padding) $value .= str_repeat("=", 4 - $padding);
+          $value = base64_decode($value, true);
+          if ($value === false) exit(1);
+        }
+        echo $key, "=", rtrim(strtr(base64_encode($value), "+/", "-_"), "="), PHP_EOL;
+      }
+    ' "$INI"
+  )
+  PORT=${PORT:-wlan0}
+}
+
+load_ini
 
 # return variable value from file
 var(){

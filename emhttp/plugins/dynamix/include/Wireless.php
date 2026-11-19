@@ -32,6 +32,7 @@ $masks = [
 $_SERVER['REQUEST_URI'] = 'settings';
 require_once "$docroot/webGui/include/Translations.php";
 require_once "$docroot/webGui/include/Helpers.php";
+require_once "$docroot/webGui/include/WirelessState.php";
 
 function escapeSSID($text) {
   return str_replace('"', '\"', $text);
@@ -116,10 +117,12 @@ case 'list':
     $echo['active']['heading'] = $state;
 
     foreach ($wlan as $network => $block) {
-      $attr[$network]['ATTR1'] = $block[0] ?? '';
-      $attr[$network]['ATTR2'] = $block[2] ?? '';
-      $attr[$network]['ATTR3'] = $block[4] ?? '';
-      $attr[$network]['ATTR4'] = $block[1] ?? '';
+      if (!wireless_name_has_quotes($network)) {
+        $attr[$network]['ATTR1'] = $block[0] ?? '';
+        $attr[$network]['ATTR2'] = $block[2] ?? '';
+        $attr[$network]['ATTR3'] = $block[4] ?? '';
+        $attr[$network]['ATTR4'] = $block[1] ?? '';
+      }
       if (isset($wifi[$network]['GROUP'])) {
         if ($network == $alive || $wifi[$network]['GROUP'] == 'active') {
           $echo['active']['items'][] = [
@@ -152,9 +155,16 @@ case 'list':
   echo json_encode($echo);
   break;
 case 'join':
+  $ssid = rawurldecode($_POST['ssid']);
+  if (wireless_name_has_quotes($ssid)) {
+    http_response_code(422);
+    header('Content-Type: text/plain; charset=UTF-8');
+    echo _('Wi-Fi names containing single or double quotes are not supported.');
+    break;
+  }
   if (is_readable($ssl)) extract(parse_ini_file($ssl));
   $token   = parse_ini_file($var)['csrf_token'];
-  $ssid    = escapeSSID(rawurldecode($_POST['ssid']));
+  $section = htmlspecialchars($ssid, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
   $drop    = $_POST['task'] == 1;
   $manual  = $_POST['task'] == 3;
   $user    = _var($wifi[$ssid],'USERNAME') && isset($cipher, $key, $iv) ? openssl_decrypt($wifi[$ssid]['USERNAME'], $cipher, $key, 0, $iv) : _var($wifi[$ssid],'USERNAME');
@@ -190,7 +200,7 @@ case 'join':
   echo "<input type=\"hidden\" name=\"#file\" value=\"$cfg\">";
   echo "<input type=\"hidden\" name=\"#include\" value=\"/webGui/include/update.wireless.php\">";
   echo "<input type=\"hidden\" name=\"#command\" value=\"/webGui/scripts/wireless\">";
-  echo "<input type=\"hidden\" name=\"#section\" value=\"$ssid\">";
+  echo "<input type=\"hidden\" name=\"#section\" value=\"$section\">";
   echo "<input type=\"hidden\" name=\"ATTR1\" value=\"$attr1\">";
   echo "<input type=\"hidden\" name=\"ATTR2\" value=\"$attr2\">";
   echo "<input type=\"hidden\" name=\"ATTR3\" value=\"$attr3\">";
@@ -199,7 +209,8 @@ case 'join':
   echo "<table class=\"swal\">";
   echo "<tr><td colspan=\"2\">&nbsp;</td></tr>";
   if ($drop && isset($wifi[$ssid])) {
-    echo "<tr><td colspan=\"2\"><center><input type=\"button\" class=\"form\" value=\""._('Forget this network')."\" onclick=\"manage_wifi(encodeURIComponent('$ssid'),2)\"></center></td></tr>";
+    $encoded = rawurlencode($ssid);
+    echo "<tr><td colspan=\"2\"><center><input type=\"button\" class=\"form\" value=\""._('Forget this network')."\" onclick=\"manage_wifi('$encoded',2)\"></center></td></tr>";
     echo "<tr><td colspan=\"2\">&nbsp;</td></tr>";
   }
   if ($manual || $safe) {
@@ -248,8 +259,11 @@ case 'join':
   echo "</form>";
   break;
 case 'forget':
-  $ssid = escapeSSID(rawurldecode($_POST['ssid']));
-  if ($wifi[$ssid]['GROUP'] == 'active') exec("/etc/rc.d/rc.wireless stop &>/dev/null &");
+  $ssid = rawurldecode($_POST['ssid']);
+  // Older forms may refer to a saved name with escaped quotes.
+  if (!isset($wifi[$ssid])) $ssid = escapeSSID($ssid);
+  if (!isset($wifi[$ssid])) break;
+  if (($wifi[$ssid]['GROUP'] ?? '') == 'active') exec("/etc/rc.d/rc.wireless stop &>/dev/null &");
   unset($wifi[$ssid]);
   saveWifi();
   break;
