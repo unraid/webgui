@@ -1,4 +1,14 @@
 <?php
+/**
+ * Return the request path without query parameters for route checks.
+ */
+function getRequestUriPath(): string {
+  $requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+  return is_string($requestUri) ? $requestUri : '/';
+}
+
+$consoleAuth = ($_SERVER['WEBGUI_CONSOLE_AUTH'] ?? '') === '1';
+
 // only start the session if a session cookie exists
 if (isset($_COOKIE[session_name()])) {
   session_start();
@@ -8,10 +18,19 @@ if (isset($_COOKIE[session_name()])) {
       $_SESSION['unraid_login'] = time();
     }
     session_write_close();
-    http_response_code(200);
+    if ($consoleAuth && !wsproxy_port_is_allowed($_SERVER['WEBGUI_CONSOLE_PORT'] ?? '')) {
+      http_response_code(403);
+    } else {
+      http_response_code(200);
+    }
     exit;
   }
   session_write_close();
+}
+
+if ($consoleAuth) {
+  http_response_code(401);
+  exit;
 }
 
 function isPathInDocroot(string $realPath, string $docroot): bool {
@@ -35,9 +54,91 @@ function isWebComponentsRequest(string $requestUri): bool {
   return $requestUri === $webComponentsDirectory || str_starts_with($requestUri, $webComponentsDirectory . '/');
 }
 
-function getRequestUriPath(): string {
-  $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-  return is_string($requestUri) ? $requestUri : '/';
+/**
+ * Extract allowed VNC WebSocket and SPICE graphics ports from domain XML.
+ */
+function wsproxy_ports_from_xml(string $xml): array {
+  $domain = new DOMDocument();
+  if ($xml === '' || !@$domain->loadXML($xml, LIBXML_NONET) || $domain->doctype !== null
+      || !$domain->documentElement->hasAttribute('id')) {
+    return [];
+  }
+
+  $ports = [];
+  $xpath = new DOMXPath($domain);
+  foreach ($xpath->query('/domain/devices/graphics') as $graphics) {
+    $portAttribute = match ($graphics->getAttribute('type')) {
+      'vnc' => 'websocket',
+      'spice' => 'port',
+      default => null,
+    };
+    if ($portAttribute === null) {
+      continue;
+    }
+
+    // Nginx connects over IPv4 loopback, so only choose a TCP listener that covers it.
+    $listen = $xpath->query('listen', $graphics)->item(0);
+    $address = $listen ? $listen->getAttribute('address') : $graphics->getAttribute('listen');
+    if (($listen && $listen->getAttribute('type') !== 'address') || !in_array($address, ['0.0.0.0', '127.0.0.1'], true)) {
+      continue;
+    }
+
+    $port = filter_var($graphics->getAttribute($portAttribute), FILTER_VALIDATE_INT, ['options' => [
+      'min_range' => $portAttribute === 'websocket' ? 5700 : 5900,
+      'max_range' => $portAttribute === 'websocket' ? 5899 : 65535,
+    ]]);
+    if ($port !== false) {
+      $ports[$port] = true;
+    }
+  }
+
+  return array_map('intval', array_keys($ports));
+}
+
+/**
+ * Return allowed console ports exposed by currently running domains.
+ */
+function wsproxy_active_ports(): array {
+  // Read live domains so auto-assigned ports and stopped VMs are not accepted.
+  $virsh = trim((string)@shell_exec('command -v virsh 2>/dev/null'));
+  if ($virsh === '') {
+    return [];
+  }
+
+  $domainList = @shell_exec(escapeshellarg($virsh) . ' list --uuid 2>/dev/null');
+  if (!is_string($domainList)) {
+    return [];
+  }
+
+  $ports = [];
+  foreach (preg_split('/\R/', trim($domainList)) as $uuid) {
+    if (!preg_match('/\A[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\z/i', $uuid)) {
+      continue;
+    }
+
+    $xml = @shell_exec(escapeshellarg($virsh) . ' dumpxml ' . escapeshellarg($uuid) . ' 2>/dev/null');
+    if (!is_string($xml)) {
+      continue;
+    }
+
+    foreach (wsproxy_ports_from_xml($xml) as $port) {
+      $ports[$port] = true;
+    }
+  }
+
+  return array_map('intval', array_keys($ports));
+}
+
+/**
+ * Check that a proxy request targets an allowed port on a running VM.
+ */
+function wsproxy_port_is_allowed(string $port): bool {
+  if (!preg_match('/\A[1-9][0-9]{3,4}\z/', $port)) {
+    return false;
+  }
+
+  $port = (int)$port;
+  return $port >= 5700 && $port <= 65535 && in_array($port, wsproxy_active_ports(), true);
 }
 
 function getAllowedExternalPublicAssetTargets(): array {

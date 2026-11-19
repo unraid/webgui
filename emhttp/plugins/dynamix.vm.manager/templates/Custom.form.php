@@ -1439,7 +1439,9 @@ foreach ($arrConfig['shares'] as $i => $arrShare) {
 	</p>
 	<p class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced protocol">
 		<b>Virtual auto port</b><br>
-		Set it you want to specify a manual port for VNC or Spice. VNC needs two ports where Spice only requires one. Leave as auto yes for the system to set.
+		Set this to No to specify manual ports for VNC or SPICE. VNC uses two ports; SPICE uses one. Leave it set to Yes to let the system choose.<br>
+		VNC and SPICE graphics ports: 5900-65535.<br>
+		VNC websocket port: 5700-5899.
 	</p>
 	<p class="<?if ($arrGPU['id'] != 'virtual') echo 'was';?>advanced vncmodel">
 		<b>Virtual Video Driver</b><br>
@@ -2151,17 +2153,62 @@ foreach ($arrConfig['evdev'] as $i => $arrEvdev) {
 var storageType = "<?=get_storage_fstype($arrConfig['template']['storage']);?>";
 var storageLoc  = "<?=$arrConfig['template']['storage']?>";
 
+/**
+ * Keep the manual console-port fields aligned with the selected console mode.
+ */
+function updateVMConsolePortFields() {
+	const protocol = $("#protocol").val() || "vnc";
+	const manualPort = $("#autoport").val() === "no";
+	const isVNC = protocol === "vnc";
+
+	$("#port").attr({min: 5900, max: 65535});
+	$("#wsport").attr({min: 5700, max: 5899});
+	$("#port,#Porttext").toggleClass('hidden', !manualPort);
+	$("#wsport,#WSPorttext").toggleClass('hidden', !(manualPort && isVNC));
+}
+
+/**
+ * Validate editable manual console ports for the active virtual console.
+ */
 function checkVNCPorts() {
-	const port = $("#port").val();
-	const wsport = $("#wsport").val();
-	if (port < 5900 || port > 65535 || wsport < 5700 || wsport > 5899 || port == wsport) {
+	updateVMConsolePortFields();
+	if ($("#autoport").val() === "yes") return true;
+
+	const $gpu = $("#vmform .gpu").first();
+	const $protocol = $("#protocol");
+	const $autoport = $("#autoport");
+	const $port = $("#port");
+	const $wsport = $("#wsport");
+	if (!$gpu.length || $gpu.is(":disabled") || $gpu.val() !== "virtual"
+		|| !$protocol.length || $protocol.is(":disabled")
+		|| !$autoport.length || $autoport.is(":disabled") || $autoport.val() !== "no"
+		|| !$port.length || $port.is(":disabled")) {
+		return true;
+	}
+	if (!$port.is(":visible")) return true;
+
+	const protocol = $protocol.val() || "vnc";
+	const port = Number($port.val());
+	const wsport = Number($wsport.val());
+	const portValid = Number.isInteger(port) && port >= 5900 && port <= 65535;
+	const wsPortEditable = $wsport.length && !$wsport.is(":disabled") && $wsport.is(":visible");
+	const wsPortValid = protocol !== "vnc"
+		|| !wsPortEditable
+		|| (Number.isInteger(wsport) && wsport >= 5700 && wsport <= 5899);
+
+	if (!portValid || !wsPortValid) {
 		swal({
 			title: "_(Invalid Port)_",
-			text: "_(VNC/SPICE ports must be between 5900 and 65535, and cannot be equal to each other. WS port should be between 5700 and 5899)_",
+			text: protocol === "spice"
+				? "_(SPICE graphics port must be between 5900 and 65535.)_"
+				: "_(VNC graphics port must be between 5900 and 65535, and VNC websocket port must be between 5700 and 5899.)_",
 			type: "error",
 			confirmButtonText: "_(Ok)_"
 		});
+		return false;
 	}
+
+	return true;
 }
 function updateMAC(index, port) {
 	var wlan0 = '<?=$mac?>'; // mac address of wlan0
@@ -2310,22 +2357,7 @@ function USBBootChange(usbboot) {
 }
 
 function AutoportChange(autoport) {
-	$("#port").removeClass('hidden');
-	$("#Porttext").removeClass('hidden');
-	$("#wsport").removeClass('hidden');
-	$("#WSPorttext").removeClass('hidden');
-	if (autoport.value == "yes") {
-		$("#port").addClass('hidden');
-		$("#Porttext").addClass('hidden');
-		$("#wsport").addClass('hidden');
-		$("#WSPorttext").addClass('hidden');
-	} else {
-		var protocol = document.getElementById("protocol").value;
-		if (protocol != "vnc") {
-			$("#wsport").addClass('hidden');
-			$("#WSPorttext").addClass('hidden');
-		}
-	}
+	updateVMConsolePortFields();
 }
 
 function VMConsoleDriverChange(driver) {
@@ -2344,17 +2376,7 @@ function VMConsoleDriverChange(driver) {
 }
 
 function ProtocolChange(protocol) {
-	var autoport = $("#autoport").val();
-	$("port").removeClass('hidden');
-	$("Porttext").removeClass('hidden');
-	$("wsport").removeClass('hidden');
-	$("WSPorttext").removeClass('hidden');
-	if (autoport == "yes") {
-		$("port").addClass('hidden');
-		$("Porttext").addClass('hidden');
-		$("wsport").addClass('hidden');
-		$("WSPorttext").addClass('hidden');
-	}
+	updateVMConsolePortFields();
 
     const select = document.getElementById('vncdspopt');
     const currentValue = select.value;
@@ -2950,6 +2972,7 @@ $(function() {
 	});
 
 	$("#vmform .formview #btnSubmit").click(function frmSubmit() {
+		if (!checkVNCPorts()) return;
 		var $button = $(this);
 		var $panel = $('.formview');
 		var form = $button.closest('form');
@@ -3016,6 +3039,7 @@ $(function() {
 	});
 
 	$("#vmform .formview #btnTemplateSubmit").click(function frmSubmit(){
+		if (!checkVNCPorts()) return;
 		var $button = $(this);
 		var $panel = $('.formview');
 		var form = $button.closest('form');
@@ -3190,6 +3214,7 @@ $(function() {
 	$("#vmform .gpu").change();
 	$("#vmform .audio").change();
 	$('#vmform .cdrom').change();
+	updateVMConsolePortFields();
 	regenerateDiskPreview();
 	resetForm();
 });
