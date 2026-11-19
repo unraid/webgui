@@ -68,6 +68,8 @@ fi
 
 # Initialize the wireless networking.
 if [[ -x /etc/rc.d/rc.wireless ]]; then
+  # Migrate before WebGUI and file-sharing services can write the boot config.
+  /usr/local/emhttp/webGui/scripts/open_ssl migrate-wireless || log "Could not migrate saved wireless credentials."
   /etc/rc.d/rc.wireless start
 fi
 
