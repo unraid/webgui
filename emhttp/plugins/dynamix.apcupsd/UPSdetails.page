@@ -23,11 +23,64 @@ function getUPSstatus() {
   var batteryRuntime = "<?= _var($cfg,'MINUTES',0) ?>";
 
   $.post('/plugins/dynamix.apcupsd/include/UPSstatus.php',{level:batteryLevel,runtime:batteryRuntime},function(data) {
-    data = data.split('\n');
-    $('#ups_summary').html(data[0]);
-    $('#ups_status').html(data[1]);
+    renderUPS(data);
     setTimeout(getUPSstatus,3000);
   });
+}
+function renderUPS(data) {
+  if (typeof data == 'string') {
+    try {
+      data = JSON.parse(data);
+    } catch (e) {
+      return;
+    }
+  }
+  var summary = document.getElementById('ups_summary');
+  var details = document.getElementById('ups_status');
+  if (!details) return;
+  if (summary) {
+    summary.replaceChildren();
+    var summaryRow = document.createElement('tr');
+    summaryRow.className = 'ups';
+    (data.summary || []).forEach(function(cell) {
+      var summaryCell = document.createElement('td');
+      summaryCell.className = cell.class || '';
+      summaryCell.textContent = cell.text || '';
+      summaryRow.appendChild(summaryCell);
+    });
+    summary.appendChild(summaryRow);
+  }
+
+  details.replaceChildren();
+  var detailRow;
+  (data.details || []).forEach(function(item,index) {
+    if (item.message) {
+      var messageRow = document.createElement('tr');
+      var messageCell = document.createElement('td');
+      messageCell.colSpan = 4;
+      messageCell.style.textAlign = 'center';
+      messageCell.textContent = item.message;
+      messageRow.appendChild(messageCell);
+      details.appendChild(messageRow);
+      return;
+    }
+    if (index % 2 == 0) {
+      detailRow = document.createElement('tr');
+      details.appendChild(detailRow);
+    }
+    var keyCell = document.createElement('td');
+    var key = document.createElement('strong');
+    key.textContent = item.key || '';
+    keyCell.appendChild(key);
+    var valueCell = document.createElement('td');
+    valueCell.textContent = item.value || '';
+    detailRow.appendChild(keyCell);
+    detailRow.appendChild(valueCell);
+  });
+  if (detailRow && detailRow.children.length == 2 && (data.details || []).length % 2 == 1) {
+    detailRow.appendChild(document.createElement('td'));
+    detailRow.appendChild(document.createElement('td'));
+  }
 }
 $(getUPSstatus);
 </script>
