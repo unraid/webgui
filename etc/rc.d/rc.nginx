@@ -435,7 +435,7 @@ build_locations(){
 	#
 	# nchan subscriber endpoint
 	#
-	location ~ ^/sub/(.*)$ {
+	location ~ "^/sub/([A-Za-z0-9][A-Za-z0-9_.:-]{0,127}(?:,[A-Za-z0-9][A-Za-z0-9_.:-]{0,127})*)$" {
 	    nchan_subscriber;
 	    nchan_subscriber_timeout 0;
 	    # nchan_authorize_request <url here>
@@ -467,7 +467,9 @@ build_locations(){
 	#
 	# websocket proxy
 	#
-	location ~ /wsproxy/(.*)$ {
+	# The parent auth scope also runs auth-request.php, which limits the captured
+	# port to an active VM graphics endpoint.
+	location ~ "^/wsproxy/(5[7-9][0-9]{2})/$" {
 	    proxy_read_timeout 3600;
 	    proxy_pass http://127.0.0.1:$1;
 	    proxy_http_version 1.1;
