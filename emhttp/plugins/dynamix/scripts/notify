@@ -111,7 +111,7 @@ function clean_subject($subject) {
 function ini_encode_value($value) {
   if (is_int($value) || is_float($value)) return $value;
   if (is_bool($value)) return $value ? 'true' : 'false';
-  $value = (string)$value;
+  $value = preg_replace('/[\x00-\x1f\x7f]/', ' ', (string)$value);
   return '"'.strtr($value, ["\\"=>"\\\\", '"' => '\\"']).'"';
 }
 
