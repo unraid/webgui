@@ -383,9 +383,7 @@ if (isset($_GET['xmlTemplate'])) {
         }
       }
     }
-    $xml['Overview'] = str_replace(['[', ']'], ['<', '>'], $xml['Overview']);
-    $xml['Description'] = $xml['Overview'] = strip_tags(str_replace("<br>","\n", $xml['Overview']));
-    echo "<script>var Settings=".json_encode($xml).";</script>";
+    echo "<script>var Settings=".json_encode($xml, JSON_HEX_TAG | JSON_INVALID_UTF8_SUBSTITUTE).";</script>";
   }
 }
 echo "<script>var Allocations=".json_encode(getAllocations()).";</script>";
@@ -591,35 +589,35 @@ function makeConfig(opts) {
   var icons = {'Path':'folder-o', 'Port':'minus-square-o', 'Variable':'file-text-o', 'Label':'tags', 'Device':'play-circle-o'};
   var newConfig = $("#templateDisplayConfig").html();
   newConfig =  newConfig.format(
-    stripTags(opts.Name),
-    opts.Target,
-    opts.Default,
-    opts.Mode,
-    opts.Description,
-    opts.Type,
-    opts.Display,
-    opts.Required,
-    opts.Mask,
-    escapeQuote(opts.Value),
+    escapeDockerField(opts.Name),
+    escapeDockerField(opts.Target),
+    escapeDockerField(opts.Default),
+    escapeDockerField(opts.Mode),
+    escapeDockerField(opts.Description),
+    escapeDockerField(opts.Type),
+    escapeDockerField(opts.Display),
+    escapeDockerField(opts.Required),
+    escapeDockerField(opts.Mask),
+    escapeDockerField(opts.Value),
     opts.Buttons,
     opts.Required=='true' ? 'required' : '',
-    sprintf('Container %s',opts.Type),
+    escapeDockerField(sprintf('Container %s',opts.Type)),
     icons[opts.Type] || 'question'
   );
-  newConfig = "<div id='ConfigNum"+opts.Number+"' class='config_"+opts.Display+"'' >"+newConfig+"</div>";
+  newConfig = "<div id='ConfigNum"+opts.Number+"' class='config_"+escapeDockerField(opts.Display)+"'>"+newConfig+"</div>";
   newConfig = $($.parseHTML(newConfig));
-  value     = newConfig.find("input[name='confValue[]']");
+  var value = newConfig.find("input[name='confValue[]']");
   if (opts.Type == "Path") {
     value.attr("onclick", "openFileBrowser(this,$(this).val(),$(this).val(),'',true,false);");
   } else if (opts.Type == "Device") {
     value.attr("onclick", "openFileBrowser(this,'/dev','/dev','',true,true);")
   } else if (opts.Type == "Variable" && opts.Default.split("|").length > 1) {
     var valueOpts = opts.Default.split("|");
-    var newValue = "<select name='confValue[]' class='selectVariable' default='"+valueOpts[0]+"'>";
-    for (var i = 0; i < valueOpts.length; i++) {
-      newValue += "<option value='"+valueOpts[i]+"' "+(opts.Value == valueOpts[i] ? "selected" : "")+">"+valueOpts[i]+"</option>";
-    }
-    newValue += "</select>";
+    var newValue = $('<select>', {name:'confValue[]',class:'selectVariable'}).attr('default',valueOpts[0]);
+    valueOpts.forEach(function(option) {
+      var selected = opts.Value == option;
+      newValue.append(new Option(option,option,selected,selected));
+    });
     value.replaceWith(newValue);
   } else if (opts.Type == "Port") {
     value.addClass("numbersOnly");
@@ -631,12 +629,10 @@ function makeConfig(opts) {
   return newConfig.prop('outerHTML');
 }
 
-function stripTags(string) {
-  return string.replace(/(<([^>]+)>)/ig,"");
-}
-
-function escapeQuote(string) {
-  return string.replace(new RegExp('"','g'),"&quot;");
+function escapeDockerField(value) {
+  return String(value ?? '').replace(/[&<>"']/g, function(character) {
+    return {'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[character];
+  });
 }
 
 function makeAllocations(container,current) {
@@ -981,7 +977,7 @@ if (isset($xml["Config"])) {
 <?endif;?>
 <?if ($xmlType=='edit'):?>
 <?if ($DockerClient->doesContainerExist($templateName)):?>
-<input type="hidden" name="existingContainer" value="<?=$templateName?>">
+<input type="hidden" name="existingContainer" value="<?=htmlspecialchars($templateName)?>">
 <?endif;?>
 <?else:?>
 <div markdown="1" class="TemplateDropDown">
@@ -1304,13 +1300,13 @@ _(Use Tailscale)_:
 <?if(!empty($TS_not_approved)):?>
 <div markdown="1" class="TSdivider noshow">
 <b>_(Warning)_</b>:
-: <span>The following route(s) are not approved: <b><?=trim($TS_not_approved)?></b></span>
+: <span>The following route(s) are not approved: <b><?=htmlspecialchars(trim($TS_not_approved))?></b></span>
 </div>
 <?endif;?>
 
 <div markdown="1" class="TShostname noshow">
 _(Tailscale Hostname)_:
-: <input type="text" pattern="[A-Za-z0-9_\-]*" name="TShostname" <?php if (!empty($xml['TailscaleHostname'])) echo 'value="' . $xml['TailscaleHostname'] . '"'; ?> placeholder="_(Hostname for the container)_"> <?=$TS_HostNameWarning?>
+: <input type="text" pattern="[A-Za-z0-9_\-]*" name="TShostname" <?php if (!empty($xml['TailscaleHostname'])) echo 'value="' . htmlspecialchars($xml['TailscaleHostname']) . '"'; ?> placeholder="_(Hostname for the container)_"> <?=$TS_HostNameWarning?>
 
 :docker_tailscale_hostname_help:
 
@@ -1331,7 +1327,7 @@ _(Be a Tailscale Exit Node)_:
 <div markdown="1" class="TSexitnodeip noshow">
 _(Use a Tailscale Exit Node)_:
 : <?if($ts_en_check !== true && empty($ts_exit_nodes)):?>
-<input type="text" name="TSexitnodeip" <?php if (!empty($xml['TailscaleExitNodeIP'])) echo 'value="' . $xml['TailscaleExitNodeIP'] . '"'; ?> placeholder="_(IP/Hostname from Exit Node)_" onchange="processExitNodeoptions(this)">
+<input type="text" name="TSexitnodeip" <?php if (!empty($xml['TailscaleExitNodeIP'])) echo 'value="' . htmlspecialchars($xml['TailscaleExitNodeIP']) . '"'; ?> placeholder="_(IP/Hostname from Exit Node)_" onchange="processExitNodeoptions(this)">
 <?else:?>
 <select name="TSexitnodeip" id="TSexitnodeip" onchange="processExitNodeoptions(this)">
   <?=mk_option(1,'',_('None'))?>
@@ -1388,7 +1384,10 @@ _(Tailscale Serve)_:
     <?=mk_option(1,'serve',_('Serve'))?>
     <?=mk_option(1,'funnel',_('Funnel'))?>
   </select>
-<?=$TS_HTTPSDisabledWarning?><?php if (!empty($TS_webui_url)) echo '<label for="TSserve"><a href="' . $TS_webui_url . '" target="_blank">' . $TS_webui_url . '</a></label>'; ?>
+<?=$TS_HTTPSDisabledWarning?><?php if (!empty($TS_webui_url) && in_array(strtolower(parse_url($TS_webui_url, PHP_URL_SCHEME) ?? ''), ['http', 'https'], true)) {
+  $link = htmlspecialchars($TS_webui_url);
+  echo '<label for="TSserve"><a href="' . $link . '" target="_blank">' . $link . '</a></label>';
+} ?>
 
 :docker_tailscale_serve_mode_help:
 
@@ -1396,7 +1395,7 @@ _(Tailscale Serve)_:
 
 <div markdown="1" class="TSserveport noshow">
 _(Tailscale Serve Port)_:
-: <input type="text" name="TSserveport" value="<?php echo !empty($xml['TailscaleServePort']) ? $xml['TailscaleServePort'] : (!empty($TSwebuiport) ? $TSwebuiport : ''); ?>" placeholder="_(Will be detected automatically if possible)_">
+: <input type="text" name="TSserveport" value="<?php echo htmlspecialchars(($xml['TailscaleServePort'] ?? '') ?: ($TSwebuiport ?? '')); ?>" placeholder="_(Will be detected automatically if possible)_">
 
 :docker_tailscale_serve_port_help:
 
@@ -1414,7 +1413,7 @@ _(Tailscale Show Advanced Settings)_:
 
 <div markdown="1" class="TSservetarget noshow">
 _(Tailscale Serve Target)_:
-: <input type="text" name="TSservetarget" <?php if (!empty($xml['TailscaleServeTarget'])) echo 'value="' . $xml['TailscaleServeTarget'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+: <input type="text" name="TSservetarget" <?php if (!empty($xml['TailscaleServeTarget'])) echo 'value="' . htmlspecialchars($xml['TailscaleServeTarget']) . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
 :docker_tailscale_serve_target_help:
 
@@ -1422,7 +1421,7 @@ _(Tailscale Serve Target)_:
 
 <div markdown="1" class="TSservelocalpath noshow">
 _(Tailscale Serve Local Path)_:
-: <input type="text" name="TSservelocalpath" <?php if (!empty($xml['TailscaleServeLocalPath'])) echo 'value="' . $xml['TailscaleServeLocalPath'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+: <input type="text" name="TSservelocalpath" <?php if (!empty($xml['TailscaleServeLocalPath'])) echo 'value="' . htmlspecialchars($xml['TailscaleServeLocalPath']) . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
 :docker_tailscale_serve_local_path_help:
 
@@ -1430,7 +1429,7 @@ _(Tailscale Serve Local Path)_:
 
 <div markdown="1" class="TSserveprotocol noshow">
 _(Tailscale Serve Protocol)_:
-: <input type="text" name="TSserveprotocol" <?php if (!empty($xml['TailscaleServeProtocol'])) echo 'value="' . $xml['TailscaleServeProtocol'] . '"'; ?> placeholder="_(Leave empty if unsure, defaults to https)_">
+: <input type="text" name="TSserveprotocol" <?php if (!empty($xml['TailscaleServeProtocol'])) echo 'value="' . htmlspecialchars($xml['TailscaleServeProtocol']) . '"'; ?> placeholder="_(Leave empty if unsure, defaults to https)_">
 
 :docker_tailscale_serve_protocol_help:
 
@@ -1438,7 +1437,7 @@ _(Tailscale Serve Protocol)_:
 
 <div markdown="1" class="TSserveprotocolport noshow">
 _(Tailscale Serve Protocol Port)_:
-: <input type="text" name="TSserveprotocolport" <?php if (!empty($xml['TailscaleServeProtocolPort'])) echo 'value="' . $xml['TailscaleServeProtocolPort'] . '"'; ?> placeholder="_(Leave empty if unsure, defaults to =443)_">
+: <input type="text" name="TSserveprotocolport" <?php if (!empty($xml['TailscaleServeProtocolPort'])) echo 'value="' . htmlspecialchars($xml['TailscaleServeProtocolPort']) . '"'; ?> placeholder="_(Leave empty if unsure, defaults to =443)_">
 
 :docker_tailscale_serve_protocol_port_help:
 
@@ -1446,7 +1445,7 @@ _(Tailscale Serve Protocol Port)_:
 
 <div markdown="1" class="TSservepath noshow">
 _(Tailscale Serve Path)_:
-: <input type="text" name="TSservepath" <?php if (!empty($xml['TailscaleServePath'])) echo 'value="' . $xml['TailscaleServePath'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+: <input type="text" name="TSservepath" <?php if (!empty($xml['TailscaleServePath'])) echo 'value="' . htmlspecialchars($xml['TailscaleServePath']) . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
 :docker_tailscale_serve_path_help:
 
@@ -1454,8 +1453,8 @@ _(Tailscale Serve Path)_:
 
 <div markdown="1" class="TSwebui noshow">
 _(Tailscale WebUI)_:
-: <input type="text" name="TSwebui" value="<?php echo !empty($TS_webui_url) ? $TS_webui_url : ''; ?>" placeholder="Will be determined automatically if possible" disabled>
-<input type="hidden" name="TSwebui" <?php if (!empty($xml['TailscaleWebUI'])) echo 'value="' . $xml['TailscaleWebUI'] . '"'; ?>>
+: <input type="text" name="TSwebui" value="<?php echo htmlspecialchars($TS_webui_url ?? ''); ?>" placeholder="Will be determined automatically if possible" disabled>
+<input type="hidden" name="TSwebui" <?php if (!empty($xml['TailscaleWebUI'])) echo 'value="' . htmlspecialchars($xml['TailscaleWebUI']) . '"'; ?>>
 
 :docker_tailscale_serve_webui_help:
 
@@ -1463,7 +1462,7 @@ _(Tailscale WebUI)_:
 
 <div markdown="1" class="TSroutes noshow">
 _(Tailscale Advertise Routes)_:
-: <input type="text" pattern="[0-9:., \/]*" name="TSroutes" <?php if (!empty($xml['TailscaleRoutes'])) echo 'value="' . $xml['TailscaleRoutes'] . '"'?> placeholder="_(Leave empty if unsure)_">
+: <input type="text" pattern="[0-9A-Fa-f:., \/]*" name="TSroutes" <?php if (!empty($xml['TailscaleRoutes'])) echo 'value="' . htmlspecialchars($xml['TailscaleRoutes']) . '"'?> placeholder="_(Leave empty if unsure)_">
 
 :docker_tailscale_advertise_routes_help:
 
@@ -1482,7 +1481,7 @@ _(Tailscale Accept Routes)_:
 
 <div markdown="1" class="TSdaemonparams noshow">
 _(Tailscale Daemon Parameters)_:
-: <input type="text" name="TSdaemonparams" <?php if (!empty($xml['TailscaleDParams'])) echo 'value="' . $xml['TailscaleDParams'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+: <input type="text" name="TSdaemonparams" <?php if (!empty($xml['TailscaleDParams'])) echo 'value="' . htmlspecialchars($xml['TailscaleDParams']) . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
 :docker_tailscale_daemon_extra_params_help:
 
@@ -1490,7 +1489,7 @@ _(Tailscale Daemon Parameters)_:
 
 <div markdown="1" class="TSextraparams noshow">
 _(Tailscale Extra Parameters)_:
-: <input type="text" name="TSextraparams" <?php if (!empty($xml['TailscaleParams'])) echo 'value="' . $xml['TailscaleParams'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+: <input type="text" name="TSextraparams" <?php if (!empty($xml['TailscaleParams'])) echo 'value="' . htmlspecialchars($xml['TailscaleParams']) . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
 :docker_tailscale_extra_param_help:
 
@@ -1498,7 +1497,7 @@ _(Tailscale Extra Parameters)_:
 
 <div markdown="1" class="TSstatedir noshow">
 _(Tailscale State Directory)_:
-: <input type="text" name="TSstatedir" <?php if (!empty($xml['TailscaleStateDir'])) echo 'value="' . $xml['TailscaleStateDir'] . '"'; ?> placeholder="_(Leave empty if unsure)_">
+: <input type="text" name="TSstatedir" <?php if (!empty($xml['TailscaleStateDir'])) echo 'value="' . htmlspecialchars($xml['TailscaleStateDir']) . '"'; ?> placeholder="_(Leave empty if unsure)_">
 
 :docker_tailscale_statedir_help:
 
@@ -1681,7 +1680,7 @@ function showSubnet(bridge) {
     $('#netCONT').val('');
   } else if (bridge.match(/^(container)$/i) !== null) {
     $('.netCONT').show();
-    $('#netCONT').val('<?php echo (isset($xml) && isset($xml['Network'][1])) ? $xml['Network'][1] : ''; ?>');
+    $('#netCONT').val(Array.isArray(window.Settings?.Network) ? Settings.Network[1] : '');
     $('.myIP').hide();
     $('input[name="contMyIP"]').val('');
     $('.myMAC').hide();
@@ -1893,19 +1892,19 @@ function showTailscale(source) {
     $('.TStroubleshooting').hide();
   } else {
     // reset these vals back to what they were in the XML
-    $('#TSssh').val('<?php echo (!empty($xml) && !empty($xml['TailscaleSSH'])) ? $xml['TailscaleSSH'] : 'false'; ?>');
-    $('#TSallowlanaccess').val('<?php echo (!empty($xml) && !empty($xml['TailscaleLANAccess'])) ? $xml['TailscaleLANAccess'] : 'false'; ?>');
-    $('#TSserve').val('<?php echo (!empty($xml) && !empty($xml['TailscaleServe'])) ? $xml['TailscaleServe'] : 'false'; ?>');
-    $('#TSexitnodeip').val('<?php echo (!empty($xml) && !empty($xml['TailscaleExitNodeIP'])) ? $xml['TailscaleExitNodeIP'] : ''; ?>');
-    $('#TSuserspacenetworking').val('<?php echo (!empty($xml) && !empty($xml['TailscaleUserspaceNetworking'])) ? $xml['TailscaleUserspaceNetworking'] : 'false'; ?>');
-    $('#TSacceptroutes').val('<?php echo (!empty($xml) && !empty($xml['TailscaleAcceptRoutes'])) ? $xml['TailscaleAcceptRoutes'] : 'false'; ?>');
+    $('#TSssh').val(window.Settings?.TailscaleSSH || 'false');
+    $('#TSallowlanaccess').val(window.Settings?.TailscaleLANAccess || 'false');
+    $('#TSserve').val(window.Settings?.TailscaleServe || 'false');
+    $('#TSexitnodeip').val(window.Settings?.TailscaleExitNodeIP || '');
+    $('#TSuserspacenetworking').val(window.Settings?.TailscaleUserspaceNetworking || 'false');
+    $('#TSacceptroutes').val(window.Settings?.TailscaleAcceptRoutes || 'false');
     <?if (empty($xml['TailscaleServe']) && !empty($TSwebuiport) && empty($xml['TailscaleServePort'])):?>
       $('#TSserve').val('serve');
     <?elseif (empty($xml['TailscaleServe']) && empty($TSwebuiport) && empty($xml['TailscaleServePort'])):?>
       $('#TSserve').val('no');
     <?endif;?>
     // don't reset this field if caller was the onchange event for this field
-    if (source.id != 'TSisexitnode') $('#TSisexitnode').val('<?php echo !empty($xml['TailscaleIsExitNode']) ? $xml['TailscaleIsExitNode'] : 'false'; ?>');
+    if (source.id != 'TSisexitnode') $('#TSisexitnode').val(window.Settings?.TailscaleIsExitNode || 'false');
     $('.TSisexitnode').show();
     $('.TShostname').show();
     $('.TSssh').show();
@@ -1953,23 +1952,37 @@ function toggleAllocations() {
   }
 }
 
-function load_contOverview() {
-  var new_overview = $("textarea[name='contOverview']").val();
-  new_overview = new_overview.replaceAll("[","<").replaceAll("]",">");
-  // Handle code block being created by authors indenting (manually editing the xml and spacing)
-  new_overview = new_overview.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
-  new_overview = marked(new_overview);
-  new_overview = new_overview.replaceAll("\n","<br>"); // has to be after marked
-  $("#contDescription").html(new_overview);
+function sanitizeDockerPreviewTag(tag) {
+  if (/^<\/?(?:a|b|strong|i|em|u|code)>$/i.test(tag) || /^<br\s*\/?>$/i.test(tag)) {
+    return tag.toLowerCase();
+  }
+  var link = /^<a\s+href=(["'])([^<>]*?)\1(?:\s+target=(["'])_blank\3)?\s*>$/i.exec(tag);
+  if (link) {
+    var url;
+    try {
+      url = new URL(link[2]);
+    } catch {
+      return escapeDockerField(tag);
+    }
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return '<a href="'+escapeDockerField(url.href)+'"'+(link[3] ? ' target="_blank" rel="noopener noreferrer"' : '')+'>';
+    }
+  }
+  return escapeDockerField(tag);
+}
 
-  var new_requires = $("textarea[name='contRequires']").val();
-  new_requires = new_requires.replaceAll("[","<").replaceAll("]",">");
-  // Handle code block being created by authors indenting (manually editing the xml and spacing)
-  new_requires = new_requires.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
-  new_requires = marked(new_requires);
-  new_requires = new_requires.replaceAll("\n","<br>"); // has to be after marked
-  new_requires = new_requires ? new_requires : "<em>_(None Listed)_</em>";
-  $("#contRequires").html(new_requires);
+function renderDockerPreview(text) {
+  text = text.replace(/\[(a\s+href=[^\]\r\n]+)\]/gi,"<$1>")
+             .replace(/\[(\/?(?:a|b|strong|i|em|u|code)|br\s*\/?)\](?!\()/gi,"<$1>");
+  // Handle code block indentation in authored templates.
+  text = text.replaceAll("    ","&nbsp;&nbsp;&nbsp;&nbsp;");
+  return marked(text,{sanitize:true,sanitizer:sanitizeDockerPreviewTag}).replaceAll("\n","<br>");
+}
+
+function load_contOverview() {
+  $("#contDescription").html(renderDockerPreview($("textarea[name='contOverview']").val()));
+  var requires = renderDockerPreview($("textarea[name='contRequires']").val());
+  $("#contRequires").html(requires || "<em>_(None Listed)_</em>");
 }
 
 $(function() {
@@ -1983,7 +1996,7 @@ $(function() {
           if (target.attr("type") == 'checkbox') {
             target.prop('checked', (value == 'true'));
           } else if ($(target).prop('nodeName') == 'DIV') {
-            target.html(value);
+            target.text(value);
           } else {
             target.val(value);
           }
@@ -1992,12 +2005,12 @@ $(function() {
     }
     load_contOverview();
     // Load the confCategory input into the s1 select
-    categories=$("input[name='contCategory']").val().split(" ");
-    for (var i = 0; i < categories.length; i++) {
-      $("#catSelect option[value='"+categories[i]+"']").prop("selected", true);
-    }
+    var categories = $("input[name='contCategory']").val().split(" ");
+    $("#catSelect option").filter(function() {
+      return categories.includes(this.value);
+    }).prop('selected',true);
     // Remove empty description
-    if (!Settings.Description.length) {
+    if (!Settings.Overview.length) {
       $('#canvas').find('#Overview:first').hide();
     }
     // Load config info
