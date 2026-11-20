@@ -427,6 +427,10 @@ class DockerTemplates {
 			//foreach ($tmp as $c => $d) $this->debug(sprintf('   %-10s: %s', $c, $d));
 		}
 		DockerUtil::saveJSON($dockerManPaths['webui-info'], $info);
+		// the saved status belongs to the tag, which moves on when another container using it is updated
+		foreach ($DockerClient->getDockerContainers() as $ct) {
+			if ($ct['TagMoved'] && ($info[$ct['Name']]['updated'] ?? null) === 'true') $info[$ct['Name']]['updated'] = 'false';
+		}
 		return $info;
 	}
 
@@ -1054,6 +1058,8 @@ class DockerClient {
 			$c = [];
 			$c['Image']       = DockerUtil::ensureImageTag($info['Config']['Image']);
 			$c['ImageId']     = $this->extractID($ct['ImageID']);
+			// the list shows an image ID instead of the tag once that tag no longer points at this image
+			$c['TagMoved']    = strpos($ct['Image'], 'sha256:') === 0 && strpos($info['Config']['Image'], 'sha256:') !== 0;
 			$c['Name']        = ltrim(($info['Name'] ?? $ct['Names'][0] ?? ''), '/');
 			$c['Status']      = $ct['Status'] ?: 'None';
 			$c['Running']     = $info['State']['Running'];
