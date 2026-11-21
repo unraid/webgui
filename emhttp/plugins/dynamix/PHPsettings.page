@@ -35,13 +35,9 @@ under normal running conditions.
 :end
 </div>
 
-<form markdown="1" name="php_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="preset(this)">
-<input type="hidden" name="#cleanup" value="1">
-<input type="hidden" name="#file" value="<?=$ini?>">
-<input type="hidden" name="error_log" value="<?=$log?>">
-<input type="hidden" name="display_startup_errors" value="0">
+<form markdown="1" name="php_settings" method="POST" action="/webGui/include/PHPsettings.php" target="progressFrame" onsubmit="preset(this)">
+<input type="hidden" name="cmd" value="save">
 <input type="hidden" name="display_errors" value="<?=_var($conf,'display_errors',0)?>">
-<input type="hidden" name="log_errors" value="1">
 
 &nbsp;
 : <div class="inline-block">
@@ -164,10 +160,7 @@ function preset(form) {
   // reset to default settings
   // derived from default .ini file installed at boot
   if (form.error_reporting.selectedIndex==0) {
-    form.error_log.value = "<?=$log?>";
-    form.display_startup_errors.value = "0";
     form.display_errors.value = "0";
-    form.log_errors.value = "1";
   }
   $.cookie('reload_php',1);
 }
