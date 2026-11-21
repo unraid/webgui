@@ -165,7 +165,8 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   $Network = getXmlVal($xml, "Network");
   $ExtraNetworks = getXmlVal($xml, "ExtraNetworks");
   $TS_Enabled = getXmlVal($xml, "TailscaleEnabled");
-  $oldImageID = $DockerClient->getImageID($Repository);
+  // the tag may already have moved on, when another container using it was updated first
+  $oldImageID = $DockerClient->getContainerImageID($Name) ?: $DockerClient->getImageID($Repository);
   // pull image
   if (!pullImage_nchan($Name, $Repository)) continue;
   $oldContainerInfo = $DockerClient->getContainerDetails($Name);
@@ -203,8 +204,8 @@ foreach (explode('*',rawurldecode($argv[1])) as $value) {
   if ($startContainer) addRoute($Name); // add route for remote WireGuard access
   $DockerClient->flushCaches();
   $newImageID = $DockerClient->getImageID($Repository);
-  // remove old orphan image since it's no longer used by this container
-  if ($oldImageID && $oldImageID != $newImageID) removeImage_nchan($oldImageID);
+  // remove old orphan image once no container uses it
+  if ($recreated && $oldImageID && $oldImageID != $newImageID && $DockerClient->isOrphanImage($oldImageID)) removeImage_nchan($oldImageID);
 }
 write('_DONE_','');
 ?>
