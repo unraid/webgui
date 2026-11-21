@@ -1883,10 +1883,14 @@ class Libvirt {
 	function is_dir_empty($dir) {
 		if (!is_readable($dir)) return null;
 		$handle = opendir($dir);
-		while (false !== ($entry = readdir($handle))) {
-			if ($entry != "." && $entry != "..") return false;
+		try {
+			while (false !== ($entry = readdir($handle))) {
+				if ($entry != "." && $entry != "..") return false;
+			}
+			return true;
+		} finally {
+			closedir($handle);
 		}
-		return true;
 	}
 
 	function domain_is_running($domain, $name=false) {
