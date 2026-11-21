@@ -84,6 +84,8 @@ class DockerTemplates {
 	public function download_url($url, $path='') {
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
+		curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+		curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 		curl_setopt($ch, CURLOPT_FRESH_CONNECT, true);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
@@ -430,11 +432,21 @@ class DockerTemplates {
 		return $info;
 	}
 
+	private function isSupportedIconUrl($url) {
+		if (!is_string($url) || trim($url) === '') return false;
+		$parts = parse_url(trim($url));
+		return is_array($parts)
+			&& !empty($parts['host'])
+			&& in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
+			&& !isset($parts['user']) && !isset($parts['pass']);
+	}
+
 	public function getIcon($Repository,$contName,$tmpIconUrl='') {
 		global $docroot, $dockerManPaths;
 		$imgUrl = $this->getTemplateValue($Repository, 'Icon','all',$contName);
 		if (!$imgUrl) $imgUrl = $tmpIconUrl;
 		if (!$imgUrl || trim($imgUrl) == "/plugins/dynamix.docker.manager/images/question.png") return '';
+		$imgUrl = trim($imgUrl);
 
 		$iconRAM = sprintf('%s/%s-%s.png', $dockerManPaths['images-ram'], $contName, 'icon');
 		$icon    = sprintf('%s/%s-%s.png', $dockerManPaths['images'], $contName, 'icon');
@@ -443,7 +455,13 @@ class DockerTemplates {
 		if (!is_dir(dirname($icon))) mkdir(dirname($icon), 0755, true);
 
 		if (!is_file($iconRAM)) {
-			if (!is_file($icon)) $this->download_url($imgUrl, $icon);
+			if (!is_file($icon)) {
+				if (!$this->isSupportedIconUrl($imgUrl)) {
+					my_logger("$contName: Unsupported icon URL");
+					return '';
+				}
+				$this->download_url($imgUrl, $icon);
+			}
 			@copy($icon, $iconRAM);
 		}
 		if (!is_file($icon) && is_file($iconRAM)) {
